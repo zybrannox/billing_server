@@ -1,9 +1,18 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect,APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 from pymongo import MongoClient
+import cloudinary
+import cloudinary.uploader
+
+
+cloudinary.config( 
+    cloud_name = "du9hcdtn0",
+    api_key = os.getenv("CLOUDINARY_API_KEY"),
+    api_secret = os.getenv("CLOUDINARY_API_SECRET")
+)
 
 # MongoDB connection
 mongo_uri = os.getenv("MONGO_URI")
@@ -12,6 +21,7 @@ db = client.project_db
 collection = db.projects
 
 app = FastAPI()
+router = APIRouter()
 
 # CORS setup
 app.add_middleware(
@@ -38,6 +48,15 @@ class Project(BaseModel):
 @app.get("/")
 def root():
     return {"message": "Backend running"}
+
+# upload Image
+@router.post("/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    try:
+        result = cloudinary.uploader.upload(file.file)
+        return {"url": result["secure_url"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Create project
 @app.post("/projects/")
