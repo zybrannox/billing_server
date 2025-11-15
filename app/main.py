@@ -49,7 +49,7 @@ class Project(BaseModel):
 def root():
     return {"message": "Backend running"}
 
-# upload Image
+# upload Image to Cloudinary
 @router.post("/upload-image")
 async def upload_image(file: UploadFile = File(...)):
     try:
