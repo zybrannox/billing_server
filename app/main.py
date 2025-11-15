@@ -7,7 +7,7 @@ from pymongo import MongoClient
 
 # MongoDB connection
 mongo_uri = os.getenv("MONGO_URI")
-client = MongoClient(MONGO_URL, tls=True, tlsAllowInvalidCertificates=True)
+MONGO_URL = MongoClient(MONGO_URL, tls=True, tlsAllowInvalidCertificates=True)
 db = client.project_db
 collection = db.projects
 
