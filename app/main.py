@@ -14,7 +14,7 @@ cloudinary.config(
     api_secret=os.getenv("CLOUDINARY_API_SECRET")
 )
 
-# MongoDB connection
+# MongoDB Connection
 mongo_uri = os.getenv("MONGO_URI")
 client = MongoClient(mongo_uri, tls=True, tlsAllowInvalidCertificates=True)
 db = client.project_db
