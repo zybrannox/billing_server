@@ -2,12 +2,12 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import os
 from pymongo import MongoClient
 
-# Direct MongoDB connection
-MONGO_URL = "mongodb+srv://zybrannox:12345@cluster0.tz16nds.mongodb.net/?appName=Cluster0"
+# MongoDB connection
+mongo_uri = os.getenv("MONGO_URI")
 client = MongoClient(MONGO_URL, tls=True, tlsAllowInvalidCertificates=True)
-dbs = client.list_database_names()
 db = client.project_db
 collection = db.projects
 
@@ -16,7 +16,7 @@ app = FastAPI()
 # CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["https://taskmanager-three-blush.vercel.app/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
