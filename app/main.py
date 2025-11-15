@@ -1,20 +1,21 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, APIRouter, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import os
 from pymongo import MongoClient
+from typing import List
+import os
 import cloudinary
 import cloudinary.uploader
 
 # Cloudinary config
 cloudinary.config(
-    cloud_name="du9hcdtn0",
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
     api_key=os.getenv("CLOUDINARY_API_KEY"),
     api_secret=os.getenv("CLOUDINARY_API_SECRET")
 )
 
-# MongoDB Connection
+# MongoDB connection
 mongo_uri = os.getenv("MONGO_URI")
 client = MongoClient(mongo_uri, tls=True, tlsAllowInvalidCertificates=True)
 db = client.project_db
@@ -23,17 +24,16 @@ collection = db.projects
 app = FastAPI()
 router = APIRouter()
 
-# Corrected CORS setup — no trailing slash
+# CORS for production and dev
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://taskmanager-three-blush.vercel.app",
-        "http://localhost:3000",  # optional for local dev
-        "http://127.0.0.1:3000",  # optional for local dev
+        "https://taskmanager-three-blush.vercel.app",  # your production frontend
+        "http://localhost:3000"                         # optional dev
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 # Project model
@@ -46,49 +46,35 @@ class Project(BaseModel):
     priority: str
     description: str
     client_status: str
-    images: list[str]
+    images: List[str]
 
 # Root route
 @app.get("/")
 def root():
     return {"message": "Backend running"}
 
-# Upload Image to Cloudinary
+# Upload multiple images to Cloudinary
 @router.post("/upload-image")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_images(files: List[UploadFile] = File(...)):
+    uploaded_urls = []
     try:
-        result = cloudinary.uploader.upload(file.file)
-        return {"url": result["secure_url"]}
+        for file in files:
+            result = cloudinary.uploader.upload(file.file)
+            uploaded_urls.append(result["secure_url"])
+        return {"urls": uploaded_urls}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Cloudinary upload error: {str(e)}")
 
-# Create project
+# Create a new project
 @app.post("/projects/")
 async def create_project(project: Project):
-    try:
-        print("Incoming data:", project.dict())
-        collection.insert_one(project.dict())
-        return JSONResponse(content={"message": "Project added successfully!"}, status_code=201)
-    except Exception as e:
-        print("Error inserting:", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    collection.insert_one(project.model_dump())
+    return {"message": "Project added successfully!"}
 
 # Get all projects
 @app.get("/projects/")
 async def get_projects():
-    projects = list(collection.find({}, {"_id": 0}))
-    return projects
-
-# WebSocket echo test
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_text(f"Message received: {data}")
-    except WebSocketDisconnect:
-        print("Client disconnected")
+    return list(collection.find({}, {"_id": 0}))
 
 # Include router
 app.include_router(router)
