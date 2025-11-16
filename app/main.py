@@ -54,16 +54,30 @@ def root():
     return {"message": "Backend running"}
 
 # Upload multiple images to Cloudinary
-@router.post("/upload-image")
+@app.post("/upload-image")
 async def upload_images(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
     uploaded_urls = []
-    try:
-        for file in files:
+
+    for file in files:
+        try:
+            # Read file contents (optional, for validation)
+            contents = await file.read()
+            if not contents:
+                continue  # skip empty files
+
+            # Upload to Cloudinary
             result = cloudinary.uploader.upload(file.file)
             uploaded_urls.append(result["secure_url"])
-        return {"urls": uploaded_urls}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cloudinary upload error: {str(e)}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Cloudinary upload failed: {str(e)}")
+
+    if not uploaded_urls:
+        raise HTTPException(status_code=400, detail="No valid files uploaded")
+
+    return {"urls": uploaded_urls}
 
 # Create a new project
 @app.post("/projects/")
