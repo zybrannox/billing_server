@@ -74,7 +74,8 @@ async def create_project(project: Project):
 # Get all projects
 @app.get("/projects/")
 async def get_projects():
-    return list(collection.find({}, {"_id": 0}))
+    projects = list(collection.find({}, {"_id": 0}))
+    return JSONResponse(content=projects)
 
 # Include router
 app.include_router(router)
