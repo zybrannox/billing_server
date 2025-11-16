@@ -63,12 +63,7 @@ async def upload_images(files: List[UploadFile] = File(...)):
 
     for file in files:
         try:
-            # Read file contents (optional, for validation)
-            contents = await file.read()
-            if not contents:
-                continue  # skip empty files
-
-            # Upload to Cloudinary
+            # Upload directly using file.file
             result = cloudinary.uploader.upload(file.file)
             uploaded_urls.append(result["secure_url"])
         except Exception as e:
