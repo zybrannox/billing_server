@@ -47,7 +47,7 @@ class Project(BaseModel):
     delivery: str
     status: str
     priority: str
-    description: str
+    description: str | None = None
     client_status: str
     images: List[str]
 
