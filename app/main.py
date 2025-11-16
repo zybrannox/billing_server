@@ -7,6 +7,8 @@ from typing import List
 import os
 import cloudinary
 import cloudinary.uploader
+from bson import ObjectId
+
 
 # Cloudinary config
 cloudinary.config(
@@ -38,6 +40,7 @@ app.add_middleware(
 
 # Project model
 class Project(BaseModel):
+    id: int
     name: str
     assignee: str
     started: str
@@ -83,7 +86,9 @@ async def create_project(project: Project):
 # Get all projects
 @app.get("/projects/")
 async def get_projects():
-    projects = list(collection.find({}, {"_id": 0}))
+    projects = list(collection.find({}))
+    for project in projects:
+        project["_id"] = str(project["_id"])
     return JSONResponse(content=projects)
 
 # Include router
