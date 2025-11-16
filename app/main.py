@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter
+from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -90,6 +90,13 @@ async def get_projects():
     for project in projects:
         project["_id"] = str(project["_id"])
     return JSONResponse(content=projects)
+
+@app.delete("/projects/{project_id}")
+async def delete_project(project_id: str = Path(..., description="The ID of the project to delete")):
+    result = collection.delete_one({"_id": ObjectId(project_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"message": "Project deleted successfully!"}
 
 # Include router
 app.include_router(router)
