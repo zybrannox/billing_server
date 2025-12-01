@@ -1,14 +1,18 @@
+from typing import List
 from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from pymongo import MongoClient
-from typing import List
 import os
 import cloudinary
 import cloudinary.uploader
 from bson import ObjectId
+from app.models import Project
+from dotenv import load_dotenv
 
+
+# Load environment variables from .env
+load_dotenv()
 
 # Cloudinary config
 cloudinary.config(
@@ -26,30 +30,18 @@ collection = db.projects
 app = FastAPI()
 router = APIRouter()
 
-# CORS for production and dev
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://taskmanager-three-blush.vercel.app",  # your production frontend
-        "http://localhost:3000"                         # optional dev
+        "http://localhost:5173",  # frontend dev
+        "https://taskmanager-three-blush.vercel.app"  # production
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
 
-# Project model
-class Project(BaseModel):
-    id: int
-    name: str
-    assignee: str
-    started: str
-    delivery: str
-    status: str
-    priority: str
-    description: str | None = None
-    client_status: str
-    images: List[str]
 
 # Root route
 @app.get("/")
@@ -66,16 +58,22 @@ async def upload_images(files: List[UploadFile] = File(...)):
 
     for file in files:
         try:
-            # Upload directly using file.file
-            result = cloudinary.uploader.upload(file.file)
+            # Read incoming file into bytes
+            file_bytes = await file.read()
+
+            result = cloudinary.uploader.upload(
+                file_bytes,
+                folder="portfolio_projects",
+                resource_type="image"
+            )
+
             uploaded_urls.append(result["secure_url"])
+
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Cloudinary upload failed: {str(e)}")
 
-    if not uploaded_urls:
-        raise HTTPException(status_code=400, detail="No valid files uploaded")
-
     return {"urls": uploaded_urls}
+
 
 # Create a new project
 @app.post("/projects/")
