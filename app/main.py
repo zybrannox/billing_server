@@ -8,11 +8,11 @@ import cloudinary
 import cloudinary.uploader
 from bson import ObjectId
 from app.models import Project
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 
 # Load environment variables from .env
-load_dotenv()
+# load_dotenv()
 
 # Cloudinary config
 cloudinary.config(
