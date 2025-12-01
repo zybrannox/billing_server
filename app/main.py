@@ -34,8 +34,8 @@ router = APIRouter()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://taskmanager-three-blush.vercel.app",  # production
         "http://localhost:5173",  # frontend dev
-        "https://taskmanager-three-blush.vercel.app"  # production
     ],
     allow_credentials=True,
     allow_methods=["*"],
