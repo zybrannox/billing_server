@@ -60,12 +60,12 @@ async def upload_images(files: List[UploadFile] = File(...)):
         try:
             # Read incoming file into bytes
             file_bytes = await file.read()
-            original_filename = file.filename
+            filename = file.filename.rsplit(".", 1)[0]
 
             result = cloudinary.uploader.upload(
                 file_bytes,
                 folder="portfolio_projects",
-                public_id=f"portfolio_projects/{original_filename}",  # full filename
+                public_id=filename,
                 overwrite=True,  # overwrite if same file exists
                 resource_type="image"
             )
