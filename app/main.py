@@ -110,26 +110,11 @@ async def upload_multiple(files: List[UploadFile] = File(...)):
     uploaded_files = []
 
     for file in files:
-<<<<<<< HEAD
-        try:
-            # Read incoming file into bytes
-            file_bytes = await file.read()
-            filename = file.filename.rsplit(".", 1)[0]
-
-            result = cloudinary.uploader.upload(
-                file_bytes,
-                folder="portfolio_projects",
-                public_id=filename,
-                overwrite=True,  # overwrite if same file exists
-                resource_type="image"
-            )
-=======
         content = await file.read()
         file_stream = io.BytesIO(content)
 
         media = MediaIoBaseUpload(file_stream, mimetype=file.content_type)
         metadata = {"name": file.filename, "parents": [BILLING_FOLDER_ID]}
->>>>>>> 4cfa992 (server)
 
         upload = drive_service.files().create(
             body=metadata, media_body=media, fields="id"
