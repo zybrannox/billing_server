@@ -282,15 +282,15 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8080/oauth2callback")
-GOOGLE_AUTH_URI = os.getenv("GOOGLE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth")
-GOOGLE_TOKEN_URI = os.getenv("GOOGLE_TOKEN_URI", "https://oauth2.googleapis.com/token")
-GOOGLE_CERT_URL = os.getenv("GOOGLE_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI","http://localhost:8080/oauth2callback")
+GOOGLE_AUTH_URI = os.getenv("GOOGLE_AUTH_URI","https://accounts.google.com/o/oauth2/auth")
+GOOGLE_TOKEN_URI = os.getenv("GOOGLE_TOKEN_URI","https://oauth2.googleapis.com/token")
+GOOGLE_CERT_URL = os.getenv("GOOGLE_CERT_URL","https://www.googleapis.com/oauth2/v1/certs")
 
 BILLING_FOLDER_ID = os.getenv("BILLING_FOLDER_ID")
-UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "./Billing/")
+UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER","./Billing/")
 
-ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS","http://localhost:5173").split(",") if o.strip()]
 
 # MongoDB
 MONGO_URI = os.getenv("MONGO_URI")
@@ -328,7 +328,7 @@ def create_client_secrets_file(path: str = CLIENT_SECRETS_FILE):
     payload = {
         "web": {
             "client_id": GOOGLE_CLIENT_ID,
-            "project_id": os.getenv("GOOGLE_PROJECT_ID", "railway-production"),
+            "project_id": os.getenv("GOOGLE_PROJECT_ID","billing-480420"),
             "auth_uri": GOOGLE_AUTH_URI,
             "token_uri": GOOGLE_TOKEN_URI,
             "auth_provider_x509_cert_url": GOOGLE_CERT_URL,
