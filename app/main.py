@@ -309,7 +309,10 @@ router = APIRouter()
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=[
+        "https://taskmanager-three-blush.vercel.app",  # production
+        "http://localhost:5173",  # frontend dev
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
