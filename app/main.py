@@ -24,6 +24,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Length", "Content-Disposition"],  # so the frontend can read download size/filename
 )
 
 # Add request size limit middleware for large file uploads (2GB max)
