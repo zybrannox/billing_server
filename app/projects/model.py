@@ -57,6 +57,7 @@ class ProjectRead(ProjectBase):
     design_completed_by: Optional[str] = None
     delivered_at: OptionalUTCDateTime = None
     delivered_by: Optional[str] = None
+    customer_name: Optional[str] = None
 
     model_config = {
         "from_attributes": True

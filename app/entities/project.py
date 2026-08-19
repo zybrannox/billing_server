@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
@@ -21,6 +22,11 @@ class Project(Base):
     # Nullable: existing projects predate this column, and not every
     # historical row will have a matching customer.
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
+    customer = relationship("Customer")
+
+    @property
+    def customer_name(self):
+        return f"{self.customer.first_name} {self.customer.last_name}" if self.customer else None
 
     # Order-lifecycle milestones, set server-side (never client-supplied) by
     # the dedicated /design-completed and /delivered endpoints. Nullable =

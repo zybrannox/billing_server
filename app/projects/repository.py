@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import case, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.entities.project import Project
 from .model import ProjectCreate, ProjectUpdate
 
@@ -14,7 +14,12 @@ def create_project(db: Session, project: ProjectCreate):
 
 
 def get_project(db: Session, project_id: int):
-    return db.query(Project).filter(Project.id == project_id).first()
+    return (
+        db.query(Project)
+        .options(joinedload(Project.customer))
+        .filter(Project.id == project_id)
+        .first()
+    )
 
 
 # Default table order: Pending -> In Progress -> Completed, and within each
@@ -44,7 +49,7 @@ def get_all_projects(
     priority: str | None = None,
     customer_id: int | None = None,
 ):
-    query = db.query(Project)
+    query = db.query(Project).options(joinedload(Project.customer))
 
     if search:
         like = f"%{search}%"

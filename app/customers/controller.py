@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.auth.dependencies import require_admin
+from app.auth.dependencies import require_admin, get_current_user
 from app.customers.model import CustomerCreate, CustomerUpdate, CustomerRead, CustomerListResponse
 from app.customers.service import CustomerService
 import math
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/customers", tags=["Customers"])
 def create_customer(
     customer: CustomerCreate,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    _user: dict = Depends(get_current_user),
 ):
     return CustomerService.create_customer(db, customer)
 
@@ -25,7 +25,7 @@ def get_customers(
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    _user: dict = Depends(get_current_user),
 ):
     items, total = CustomerService.get_all_customers(
         db, page=page, page_size=page_size, search=search
@@ -40,7 +40,7 @@ def get_customers(
 def get_customer(
     customer_id: int,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    _user: dict = Depends(get_current_user),
 ):
     customer = CustomerService.get_customer_by_id(db, customer_id)
 
