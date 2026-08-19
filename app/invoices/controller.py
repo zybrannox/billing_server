@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from .model import InvoiceCreate, InvoiceRead, InvoiceUpdate
+from .model import InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceDetailRead
 from .service import (
     service_create,
     service_list,
     service_get,
+    service_get_details,
     service_update,
     service_delete
 )
@@ -19,6 +20,10 @@ def create(payload: InvoiceCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=list[InvoiceRead])
 def list_invoices(db: Session = Depends(get_db)):
     return service_list(db)
+
+@router.get("/{invoice_id}/details", response_model=InvoiceDetailRead)
+def get_invoice_details(invoice_id: int, db: Session = Depends(get_db)):
+    return service_get_details(db, invoice_id)
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db)):

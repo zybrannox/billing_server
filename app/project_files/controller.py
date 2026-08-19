@@ -3,7 +3,12 @@ from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.projects.repository import get_project
-from app.project_files.service import save_streaming_file, delete_uploaded_file
+from app.project_files.service import (
+    save_streaming_file,
+    delete_uploaded_file,
+    mark_file_downloaded,
+    mark_project_files_downloaded,
+)
 from app.project_files.model import AttachFilesRequest
 from app.entities import Project
 from typing import List
@@ -203,12 +208,14 @@ def get_thumbnail(filename: str):
 
 
 @router.get("/download/{filename}")
-def download_file(filename: str):
+def download_file(filename: str, db: Session = Depends(get_db)):
     from .utils import get_cache_headers
 
     file_path = UPLOAD_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
+
+    mark_file_downloaded(db, filename)
 
     return FileResponse(
         file_path,
@@ -224,6 +231,8 @@ def download_project_files(project_id: int, db: Session = Depends(get_db)):
 
     if not project or not project.file_paths:
         raise HTTPException(status_code=404, detail="No files found for this project")
+
+    mark_project_files_downloaded(db, project)
 
     from stream_zip import stream_zip, NO_COMPRESSION_64
     import stat

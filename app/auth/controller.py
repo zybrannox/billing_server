@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
-from app.config import IS_PRODUCTION
+from app.config import IS_PRODUCTION, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.database import get_db
 from app.auth.model import LoginRequest, TokenResponse
 from app.auth.service import AuthService
@@ -28,7 +28,11 @@ async def login(data: LoginRequest, response: Response, db: AsyncSession = Depen
         httponly=True,
         secure=IS_PRODUCTION,
         samesite="none" if IS_PRODUCTION else "lax",
-        max_age=3600        # 1 hour
+        # Keep the cookie's lifetime in lockstep with the JWT's own expiry -
+        # a hardcoded value here previously drifted from
+        # ACCESS_TOKEN_EXPIRE_MINUTES, and a too-short cookie logs users out
+        # before their (still-valid) token would have expired.
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
     return {"message": "Login successful"}
 

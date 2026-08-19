@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.orm import Session
 from app.entities.invoice import Invoice
 from .model import InvoiceCreate, InvoiceUpdate
@@ -8,6 +9,14 @@ def create_invoice(db: Session, invoice: InvoiceCreate):
         db.add(new_invoice)
         db.commit()
         db.refresh(new_invoice)
+
+        # invoice_number depends on the row's own id, so it can only be
+        # generated after the insert - format: INV-<year>-<id, zero-padded>.
+        year = (new_invoice.created_at or datetime.utcnow()).year
+        new_invoice.invoice_number = f"INV-{year}-{new_invoice.id:05d}"
+        db.commit()
+        db.refresh(new_invoice)
+
         return new_invoice
     except Exception as e:
         db.rollback()

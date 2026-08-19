@@ -1,13 +1,13 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
 
 class InvoiceBase(BaseModel):
     project_id: int
-    invoice_number: str
     amount: float
     status: str = "pending"
-    due_date: Optional[datetime] = None
+    due_date: OptionalUTCDateTime = None
 
 class InvoiceCreate(InvoiceBase):
     pass
@@ -19,7 +19,31 @@ class InvoiceUpdate(BaseModel):
 
 class InvoiceRead(InvoiceBase):
     id: int
-    created_at: datetime
+    invoice_number: str
+    created_at: UTCDateTime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
+
+
+class ProjectSummary(BaseModel):
+    id: int
+    project_type: str
+    description: Optional[str] = None
+    start_date: OptionalUTCDateTime = None
+    delivery_date: OptionalUTCDateTime = None
+
+    model_config = {"from_attributes": True}
+
+
+class CustomerSummary(BaseModel):
+    first_name: str
+    last_name: str
+    contact_number: str
+    email: str
+
+    model_config = {"from_attributes": True}
+
+
+class InvoiceDetailRead(InvoiceRead):
+    project: Optional[ProjectSummary] = None
+    customer: Optional[CustomerSummary] = None

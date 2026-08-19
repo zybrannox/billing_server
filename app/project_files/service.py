@@ -1,6 +1,8 @@
 import shutil
 import uuid
 from pathlib import Path
+from sqlalchemy.orm import Session
+from app.entities import Project
 
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,6 +40,41 @@ def delete_uploaded_file(filename: str) -> bool:
         thumb_path.unlink()
 
     return existed
+
+def mark_file_downloaded(db: Session, filename: str):
+    """Flags a single file as downloaded, server-side, so every user (not
+    just the browser that downloaded it) sees it as downloaded. A file could
+    in principle be linked to more than one project, so this checks all of
+    them rather than assuming a single owner."""
+    projects = db.query(Project).filter(Project.file_paths.isnot(None)).all()
+    for project in projects:
+        paths = project.file_paths or []
+        new_paths = []
+        changed = False
+        for p in paths:
+            if isinstance(p, dict) and p.get("path") == filename and not p.get("downloaded"):
+                p = {**p, "downloaded": True}
+                changed = True
+            new_paths.append(p)
+        if changed:
+            project.file_paths = new_paths
+    db.commit()
+
+
+def mark_project_files_downloaded(db: Session, project: Project):
+    """Flags every file on a project as downloaded (used by the zip/download-all endpoint)."""
+    paths = project.file_paths or []
+    new_paths = []
+    changed = False
+    for p in paths:
+        if isinstance(p, dict) and not p.get("downloaded"):
+            p = {**p, "downloaded": True}
+            changed = True
+        new_paths.append(p)
+    if changed:
+        project.file_paths = new_paths
+        db.commit()
+
 
 def delete_project_files(file_paths: list):
     for entry in file_paths:

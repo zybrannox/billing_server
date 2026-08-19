@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from app.entities import UserRole
 
@@ -15,10 +15,18 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str]
-    phone: Optional[str]
-    role: Optional[UserRole]
-    is_active: Optional[bool]
+    # Pydantic v2 does NOT default Optional fields to None on its own - each
+    # one needs an explicit `= None`, otherwise it's still required and every
+    # partial update would 422 for omitting any field.
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    role: Optional[UserRole] = None
+    is_active: Optional[bool] = None
+
+
+class UserPasswordUpdate(BaseModel):
+    new_password: str = Field(min_length=6)
 
 
 class UserRead(UserBase):
