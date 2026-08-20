@@ -9,12 +9,13 @@ class CustomerService:
 
     @staticmethod
     def create_customer(db: Session, customer):
-        exists = db.execute(
-            select(Customer).where(Customer.email == customer.email)
-        ).scalar_one_or_none()
+        if customer.email:
+            exists = db.execute(
+                select(Customer).where(Customer.email == customer.email)
+            ).scalar_one_or_none()
 
-        if exists:
-            raise HTTPException(status_code=400, detail="Email already registered")
+            if exists:
+                raise HTTPException(status_code=400, detail="Email already registered")
 
         new_customer = Customer(
             first_name=customer.first_name,

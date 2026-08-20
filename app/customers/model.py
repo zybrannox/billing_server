@@ -6,7 +6,7 @@ class CustomerBase(BaseModel):
     first_name: str
     last_name: str
     contact_number: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
 
 
 class CustomerCreate(CustomerBase):

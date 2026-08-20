@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.auth.dependencies import get_current_user
 from app.projects.repository import get_project
 from app.project_files.service import (
     save_streaming_file,
@@ -32,7 +33,8 @@ async def upload_files(
     project_id: int,
     files: List[UploadFile] = File(...),
     metadata: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     # File size limits - Updated for large files
     MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB per file
@@ -95,6 +97,7 @@ async def upload_files(
 async def upload_files_standalone(
     files: List[UploadFile] = File(...),
     metadata: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user),
 ):
     """Uploads files ahead of project creation (Gmail-style: attach now, link later).
     Files are stored immediately but not associated with any project yet -
@@ -146,7 +149,7 @@ async def upload_files_standalone(
 
 
 @router.delete("/{filename}")
-def delete_uploaded_file_endpoint(filename: str, db: Session = Depends(get_db)):
+def delete_uploaded_file_endpoint(filename: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Strip any directory components to prevent path traversal.
     safe_filename = Path(filename).name
 
@@ -170,7 +173,7 @@ def delete_uploaded_file_endpoint(filename: str, db: Session = Depends(get_db)):
 
 
 @router.post("/attach/{project_id}")
-def attach_files(project_id: int, payload: AttachFilesRequest, db: Session = Depends(get_db)):
+def attach_files(project_id: int, payload: AttachFilesRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Links files that were already uploaded via /files/upload to a project,
     without re-uploading their bytes."""
 
@@ -190,7 +193,7 @@ def attach_files(project_id: int, payload: AttachFilesRequest, db: Session = Dep
 
 
 @router.get("/thumbnail/{filename}")
-def get_thumbnail(filename: str):
+def get_thumbnail(filename: str, current_user: dict = Depends(get_current_user)):
     from .utils import THUMBNAIL_DIR, generate_thumbnail, get_cache_headers
     
     thumb_path = THUMBNAIL_DIR / filename
@@ -208,7 +211,7 @@ def get_thumbnail(filename: str):
 
 
 @router.get("/download/{filename}")
-def download_file(filename: str, db: Session = Depends(get_db)):
+def download_file(filename: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     from .utils import get_cache_headers
 
     file_path = UPLOAD_DIR / filename
@@ -226,7 +229,7 @@ def download_file(filename: str, db: Session = Depends(get_db)):
 
 
 @router.get("/download/project/{project_id}")
-def download_project_files(project_id: int, db: Session = Depends(get_db)):
+def download_project_files(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     project = get_project(db, project_id)
 
     if not project or not project.file_paths:
@@ -264,7 +267,7 @@ def download_project_files(project_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/view/{filename}")
-def view_file(filename: str, request: Request):
+def view_file(filename: str, request: Request, current_user: dict = Depends(get_current_user)):
     from .utils import get_cache_headers
 
     file_path = UPLOAD_DIR / filename

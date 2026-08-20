@@ -11,7 +11,11 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.post("/", response_model=UserRead)
-async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
+async def create_user(
+    user: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
     new_user = UserService.create_user(db, user)
     return new_user
 
@@ -22,12 +26,17 @@ async def get_users(
     role: str | None = None,
     limit: int | None = None,
     db: AsyncSession = Depends(get_db),
+    _admin: dict = Depends(require_admin),
 ):
     return UserService.get_all_users(db, search=search, role=role, limit=limit)
 
 
 @router.get("/{user_id}", response_model=UserRead)
-async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
+async def get_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
     user = UserService.get_user_by_id(db, user_id)
 
     if not user:

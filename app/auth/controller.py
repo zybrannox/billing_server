@@ -41,3 +41,18 @@ async def login(data: LoginRequest, response: Response, db: AsyncSession = Depen
 async def read_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
+
+@router.post("/logout")
+async def logout(response: Response):
+    # Attributes must mirror set_cookie's (path/domain/samesite/secure) -
+    # browsers only clear a cookie when the deletion matches how it was
+    # scoped, otherwise the original cookie is left behind untouched and
+    # still gets sent on every request as if the user never logged out.
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="none" if IS_PRODUCTION else "lax",
+    )
+    return {"message": "Logout successful"}
+

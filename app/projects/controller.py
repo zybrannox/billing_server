@@ -18,7 +18,7 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
 @router.post("/", response_model=ProjectRead)
-def create(payload: ProjectCreate, db: Session = Depends(get_db)):
+def create(payload: ProjectCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     return service_create(db, payload)
 
 
@@ -31,6 +31,7 @@ def list_projects(
     priority: str | None = None,
     customer_id: int | None = None,
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     return service_list(
         db,
@@ -48,28 +49,29 @@ def billing_projects(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     return service_list(db, page=page, page_size=page_size, print_status="Completed")
 
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
-def get_project(project_id: int, db: Session = Depends(get_db)):
+def get_project(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     return service_get(db, project_id)
 
 
 @router.put("/{project_id}", response_model=ProjectRead)
-def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depends(get_db)):
+def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     return service_update(db, project_id, payload)
 
 
 @router.delete("/{project_id}")
-def delete_project(project_id: int, db: Session = Depends(get_db)):
+def delete_project(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     return service_delete(db, project_id)
 
 
 @router.post("/bulk-delete")
-def bulk_delete(payload: ProjectBulkDelete, db: Session = Depends(get_db)):
+def bulk_delete(payload: ProjectBulkDelete, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     return service_delete_bulk(db, payload.ids)
 
 
