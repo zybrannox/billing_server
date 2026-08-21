@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
 
@@ -47,3 +47,11 @@ class CustomerSummary(BaseModel):
 class InvoiceDetailRead(InvoiceRead):
     project: Optional[ProjectSummary] = None
     customer: Optional[CustomerSummary] = None
+
+
+class InvoiceListResponse(BaseModel):
+    items: List[InvoiceRead]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

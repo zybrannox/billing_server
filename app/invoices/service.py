@@ -1,3 +1,4 @@
+import math
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.entities.project import Project
@@ -9,13 +10,21 @@ from .repository import (
     update_invoice,
     delete_invoice
 )
-from .model import InvoiceCreate, InvoiceUpdate
+from .model import InvoiceCreate, InvoiceUpdate, InvoiceListResponse
 
 def service_create(db: Session, payload: InvoiceCreate):
     return create_invoice(db, payload)
 
-def service_list(db: Session):
-    return get_all_invoices(db)
+def service_list(db: Session, page: int = 1, page_size: int = 20) -> InvoiceListResponse:
+    items, total = get_all_invoices(db, page=page, page_size=page_size)
+    total_pages = math.ceil(total / page_size) if page_size else 0
+    return InvoiceListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 def service_get(db: Session, invoice_id: int):
     invoice = get_invoice(db, invoice_id)

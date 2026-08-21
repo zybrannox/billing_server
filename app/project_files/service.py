@@ -2,7 +2,7 @@ import shutil
 import uuid
 from pathlib import Path
 from sqlalchemy.orm import Session
-from app.entities import Project
+from app.entities import Project, ProjectFile
 
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -43,50 +43,36 @@ def delete_uploaded_file(filename: str) -> bool:
 
 def mark_file_downloaded(db: Session, filename: str):
     """Flags a single file as downloaded, server-side, so every user (not
-    just the browser that downloaded it) sees it as downloaded. A file could
-    in principle be linked to more than one project, so this checks all of
-    them rather than assuming a single owner."""
-    projects = db.query(Project).filter(Project.file_paths.isnot(None)).all()
-    for project in projects:
-        paths = project.file_paths or []
-        new_paths = []
-        changed = False
-        for p in paths:
-            if isinstance(p, dict) and p.get("path") == filename and not p.get("downloaded"):
-                p = {**p, "downloaded": True}
-                changed = True
-            new_paths.append(p)
-        if changed:
-            project.file_paths = new_paths
+    just the browser that downloaded it) sees it as downloaded.
+
+    Used to scan every project that had any files at all, then walk each
+    one's file list in Python looking for a path match - full read of the
+    table for one flag flip, and only gets more expensive as projects grow.
+    `path` is unique and indexed on project_files (see entities/
+    project_file.py), so this is now the single indexed UPDATE it should
+    always have been."""
+    db.query(ProjectFile).filter(
+        ProjectFile.path == filename, ProjectFile.downloaded.is_(False)
+    ).update({"downloaded": True})
     db.commit()
 
 
 def mark_project_files_downloaded(db: Session, project: Project):
     """Flags every file on a project as downloaded (used by the zip/download-all endpoint)."""
-    paths = project.file_paths or []
-    new_paths = []
-    changed = False
-    for p in paths:
-        if isinstance(p, dict) and not p.get("downloaded"):
-            p = {**p, "downloaded": True}
-            changed = True
-        new_paths.append(p)
-    if changed:
-        project.file_paths = new_paths
-        db.commit()
+    db.query(ProjectFile).filter(
+        ProjectFile.project_id == project.id, ProjectFile.downloaded.is_(False)
+    ).update({"downloaded": True})
+    db.commit()
 
 
-def delete_project_files(file_paths: list):
-    for entry in file_paths:
+def delete_project_files(paths: list[str]):
+    for filename in paths:
+        if not filename:
+            continue
         try:
-            # Handle both string and dictionary entries
-            filename = entry.get("path") if isinstance(entry, dict) else entry
-            if not filename:
-                continue
-                
             file_path = UPLOAD_DIR / filename
             if file_path.exists():
                 file_path.unlink()  # delete file
         except Exception as e:
             # log but don't fail project deletion
-            print(f"Failed to delete file {entry}: {e}")
+            print(f"Failed to delete file {filename}: {e}")

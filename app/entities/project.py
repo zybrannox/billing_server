@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -17,12 +17,28 @@ class Project(Base):
         nullable=False)
     start_date = Column(DateTime)
     delivery_date = Column(DateTime)
-    file_paths = Column(JSON, default=list)
     description = Column(String, nullable=True)
     # Nullable: existing projects predate this column, and not every
     # historical row will have a matching customer.
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
     customer = relationship("Customer")
+
+    # Replaces the old file_paths JSON column (see entities/project_file.py
+    # for why) - order_by keeps upload order stable since nothing else
+    # tracks it explicitly.
+    files = relationship(
+        "ProjectFile",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="ProjectFile.id",
+    )
+
+    @property
+    def file_paths(self):
+        """Back-compat shim so the API/frontend contract (and any code
+        still written against `.file_paths`) is unaffected by the storage
+        move from a JSON blob to the indexed `files` relationship."""
+        return self.files
 
     @property
     def customer_name(self):

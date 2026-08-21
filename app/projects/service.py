@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from fastapi import HTTPException
 from app.entities.project import Project
 from .repository import (
@@ -120,8 +120,10 @@ def service_delete(db: Session, project_id: int):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Delete files from disk first
-    delete_project_files(project.file_paths or [])
+    # Delete files from disk first - the project_files DB rows themselves
+    # are handled by the ORM cascade (see Project.files) when the project
+    # is deleted below, but that only removes rows, not the bytes on disk.
+    delete_project_files([f.path for f in project.files])
 
     # Delete DB record
     db.delete(project)
@@ -132,11 +134,16 @@ def service_delete(db: Session, project_id: int):
 
 def service_delete_bulk(db: Session, project_ids: list[int]):
     # Get projects to find file paths before deletion
-    projects = db.query(Project).filter(Project.id.in_(project_ids)).all()
+    projects = (
+        db.query(Project)
+        .options(selectinload(Project.files))
+        .filter(Project.id.in_(project_ids))
+        .all()
+    )
 
     for project in projects:
         # Delete files from disk
-        delete_project_files(project.file_paths or [])
+        delete_project_files([f.path for f in project.files])
 
     # Delete DB records using the repository function
     deleted_projects = delete_projects(db, project_ids)

@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth.dependencies import require_admin
-from .model import InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceDetailRead
+from .model import InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceDetailRead, InvoiceListResponse
 from .service import (
     service_create,
     service_list,
@@ -21,9 +21,14 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 def create(payload: InvoiceCreate, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
     return service_create(db, payload)
 
-@router.get("/", response_model=list[InvoiceRead])
-def list_invoices(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
-    return service_list(db)
+@router.get("/", response_model=InvoiceListResponse)
+def list_invoices(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    return service_list(db, page=page, page_size=page_size)
 
 @router.get("/{invoice_id}/details", response_model=InvoiceDetailRead)
 def get_invoice_details(invoice_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):

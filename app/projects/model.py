@@ -42,6 +42,10 @@ class ProjectUpdate(BaseModel):
 
 class FileObject(BaseModel):
     path: str
+    # The name the user actually uploaded with - `path` is a UUID-based
+    # storage name and must never be shown as "the filename". Missing on
+    # files uploaded before this field existed.
+    original_name: Optional[str] = None
     width: Optional[float] = None
     height: Optional[float] = None
     # Server-side source of truth for "has this file been downloaded" - set
@@ -49,10 +53,14 @@ class FileObject(BaseModel):
     # rather than tracking it per-browser on the client.
     downloaded: Optional[bool] = None
 
+    # Read directly from ProjectFile ORM rows now (see entities/project.py's
+    # `file_paths` property), not just from plain JSON dicts.
+    model_config = {"from_attributes": True}
+
 
 class ProjectRead(ProjectBase):
     id: int
-    file_paths: List[str | FileObject]
+    file_paths: List[FileObject]
     design_completed_at: OptionalUTCDateTime = None
     design_completed_by: Optional[str] = None
     delivered_at: OptionalUTCDateTime = None

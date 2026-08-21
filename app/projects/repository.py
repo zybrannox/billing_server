@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import case, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.entities.project import Project
 from .model import ProjectCreate, ProjectUpdate
 
@@ -16,7 +16,7 @@ def create_project(db: Session, project: ProjectCreate):
 def get_project(db: Session, project_id: int):
     return (
         db.query(Project)
-        .options(joinedload(Project.customer))
+        .options(joinedload(Project.customer), joinedload(Project.files))
         .filter(Project.id == project_id)
         .first()
     )
@@ -49,7 +49,15 @@ def get_all_projects(
     priority: str | None = None,
     customer_id: int | None = None,
 ):
-    query = db.query(Project).options(joinedload(Project.customer))
+    # selectinload, not joinedload, for the paginated list - joinedload on
+    # a one-to-many would LEFT JOIN in every file row before LIMIT/OFFSET
+    # apply, so a project with several files could consume more than one
+    # slot of the page (or get cut off mid-project). selectinload runs a
+    # second `WHERE project_id IN (...)` query against the already-paged
+    # project ids instead, which is both correct and just as cheap.
+    query = db.query(Project).options(
+        joinedload(Project.customer), selectinload(Project.files)
+    )
 
     if search:
         like = f"%{search}%"

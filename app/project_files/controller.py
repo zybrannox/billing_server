@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -11,7 +11,8 @@ from app.project_files.service import (
     mark_project_files_downloaded,
 )
 from app.project_files.model import AttachFilesRequest
-from app.entities import Project
+from app.project_files.utils import generate_thumbnail
+from app.entities import ProjectFile
 from typing import List
 from pathlib import Path
 from fastapi import Request
@@ -31,6 +32,7 @@ UPLOAD_DIR = Path("./uploads")
 @router.post("/upload/{project_id}")
 async def upload_files(
     project_id: int,
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     metadata: Optional[str] = Form(None),
     db: Session = Depends(get_db),
@@ -69,32 +71,39 @@ async def upload_files(
         except json.JSONDecodeError:
             pass
 
+    project = get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     saved_files = []
     for file in files:
         saved_filename = save_streaming_file(file, file.filename)
-        
+
         # Find matching metadata by filename
         meta = next((m for m in parsed_metadata if m.get("filename") == file.filename), {})
-        
+
         file_entry = {
             "path": saved_filename,
+            "original_name": file.filename,
             "width": meta.get("width"),
             "height": meta.get("height")
         }
         saved_files.append(file_entry)
+        db.add(ProjectFile(project_id=project.id, **file_entry))
+        # Generating this now (rather than waiting for the first
+        # /files/thumbnail request) means the resize/save work is done by
+        # the time anyone actually opens the project to look at it, instead
+        # of happening synchronously in front of that view. No-ops for
+        # non-images (see generate_thumbnail's extension check).
+        background_tasks.add_task(generate_thumbnail, saved_filename)
 
-    project = get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-        
-    project.file_paths = (project.file_paths or []) + saved_files
     db.commit()
-    db.refresh(project)
     return {"message": "uploaded", "file_paths": saved_files}
 
 
 @router.post("/upload")
 async def upload_files_standalone(
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     metadata: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user),
@@ -144,6 +153,10 @@ async def upload_files_standalone(
             "width": meta.get("width"),
             "height": meta.get("height"),
         })
+        # See upload_files above - pre-generates the thumbnail in the
+        # background so it's already there by the time anyone views it,
+        # instead of generating on-demand in front of the first viewer.
+        background_tasks.add_task(generate_thumbnail, saved_filename)
 
     return {"files": saved_files}
 
@@ -157,16 +170,10 @@ def delete_uploaded_file_endpoint(filename: str, db: Session = Depends(get_db), 
     if not deleted:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Scrub the file from any project that had already linked it.
-    projects = db.query(Project).filter(Project.file_paths.isnot(None)).all()
-    for project in projects:
-        paths = project.file_paths or []
-        new_paths = [
-            p for p in paths
-            if (p.get("path") if isinstance(p, dict) else p) != safe_filename
-        ]
-        if len(new_paths) != len(paths):
-            project.file_paths = new_paths
+    # Scrub the file from whichever project had already linked it - path is
+    # unique and indexed, so this is one targeted delete instead of loading
+    # every project with any files and filtering each one's list in Python.
+    db.query(ProjectFile).filter(ProjectFile.path == safe_filename).delete()
 
     db.commit()
     return {"message": "deleted"}
@@ -182,13 +189,13 @@ def attach_files(project_id: int, payload: AttachFilesRequest, db: Session = Dep
         raise HTTPException(status_code=404, detail="Project not found")
 
     entries = [
-        {"path": f.path, "width": f.width, "height": f.height}
+        {"path": f.path, "original_name": f.original_name, "width": f.width, "height": f.height}
         for f in payload.files
     ]
 
-    project.file_paths = (project.file_paths or []) + entries
+    for entry in entries:
+        db.add(ProjectFile(project_id=project.id, **entry))
     db.commit()
-    db.refresh(project)
     return {"message": "attached", "file_paths": entries}
 
 
@@ -211,14 +218,26 @@ def get_thumbnail(filename: str, current_user: dict = Depends(get_current_user))
 
 
 @router.get("/download/{filename}")
-def download_file(filename: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def download_file(
+    filename: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     from .utils import get_cache_headers
 
     file_path = UPLOAD_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
-    mark_file_downloaded(db, filename)
+    # mark_file_downloaded scans every project with any files to find which
+    # one(s) reference this filename - real work, and it was running before
+    # a single byte of the file went out, so every download waited on it
+    # even though nothing about the download itself depends on the result.
+    # Deferring it to a background task (runs after the response starts,
+    # same db session per FastAPI's documented behavior) means the file
+    # starts streaming immediately instead.
+    background_tasks.add_task(mark_file_downloaded, db, filename)
 
     return FileResponse(
         file_path,
@@ -243,7 +262,7 @@ def download_project_files(project_id: int, db: Session = Depends(get_db), curre
 
     def member_files():
         for file_entry in project.file_paths:
-            filename = file_entry.get("path") if isinstance(file_entry, dict) else file_entry
+            filename = file_entry.path
             file_path = UPLOAD_DIR / filename
             if file_path.exists():
                 st = os.stat(file_path)
