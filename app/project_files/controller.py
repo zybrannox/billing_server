@@ -10,8 +10,14 @@ from app.project_files.service import (
     mark_file_downloaded,
     mark_project_files_downloaded,
 )
-from app.project_files.model import AttachFilesRequest
+from app.project_files.model import (
+    AttachFilesRequest,
+    InitChunkedUploadRequest,
+    InitChunkedUploadResponse,
+    CompleteChunkedUploadRequest,
+)
 from app.project_files.utils import generate_thumbnail
+from app.project_files import chunked
 from app.entities import ProjectFile
 from typing import List
 from pathlib import Path
@@ -21,6 +27,7 @@ import io
 import json
 import mimetypes
 import os
+import uuid
 import zipfile
 
 
@@ -29,8 +36,55 @@ router = APIRouter(prefix="/files", tags=["Files"])
 UPLOAD_DIR = Path("./uploads")
 
 
+# These three must be registered before /upload/{project_id} below - as a
+# path *parameter* route, "/upload/init" would otherwise match that pattern
+# first (with "init" as an invalid project_id) and never reach these at all.
+# FastAPI/Starlette matches routes in registration order, not by specificity.
+@router.post("/upload/init", response_model=InitChunkedUploadResponse)
+def init_chunked_upload(
+    payload: InitChunkedUploadRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    upload_id = chunked.init_upload(
+        payload.filename, payload.total_size, payload.total_chunks
+    )
+    return InitChunkedUploadResponse(upload_id=upload_id)
+
+
+@router.post("/upload/chunk")
+def upload_chunk(
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    chunk: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    # `def`, not `async def` - see upload_files below for why (blocking
+    # disk I/O with no `await` must not run on the event loop thread).
+    data = chunk.file.read()
+    chunked.write_chunk(upload_id, chunk_index, data)
+    return {"received": True}
+
+
+@router.post("/upload/complete")
+def complete_chunked_upload(
+    payload: CompleteChunkedUploadRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    stored_name = chunked.complete_upload(payload.upload_id)
+    # See upload_files below - pre-generates the thumbnail in the
+    # background rather than on the first /files/thumbnail request.
+    background_tasks.add_task(generate_thumbnail, stored_name)
+    return {
+        "path": stored_name,
+        "original_name": payload.filename,
+        "width": payload.width,
+        "height": payload.height,
+    }
+
+
 @router.post("/upload/{project_id}")
-async def upload_files(
+def upload_files(
     project_id: int,
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
@@ -38,6 +92,13 @@ async def upload_files(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    # `def`, not `async def`: save_streaming_file below is a blocking disk
+    # write with no `await`. Inside an async route that would freeze the
+    # single event loop thread for the whole duration of the copy - not just
+    # slow for this upload, but unresponsive for every other request the
+    # server is handling, for as long as a large file takes to write. A
+    # plain `def` route runs in FastAPI's worker thread pool instead, so a
+    # slow upload only occupies one thread while everything else keeps going.
     # File size limits - Updated for large files
     MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB per file
     MAX_TOTAL_SIZE = 2 * 1024 * 1024 * 1024  # 2GB total
@@ -102,12 +163,13 @@ async def upload_files(
 
 
 @router.post("/upload")
-async def upload_files_standalone(
+def upload_files_standalone(
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     metadata: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user),
 ):
+    # See upload_files above for why this is `def`, not `async def`.
     """Uploads files ahead of project creation (Gmail-style: attach now, link later).
     Files are stored immediately but not associated with any project yet -
     call /files/attach/{project_id} afterwards to link them."""
@@ -202,18 +264,29 @@ def attach_files(project_id: int, payload: AttachFilesRequest, db: Session = Dep
 @router.get("/thumbnail/{filename}")
 def get_thumbnail(filename: str, current_user: dict = Depends(get_current_user)):
     from .utils import THUMBNAIL_DIR, generate_thumbnail, get_cache_headers
-    
+
     thumb_path = THUMBNAIL_DIR / filename
     if not thumb_path.exists():
         # Try to generate it if it's an image
         res = generate_thumbnail(filename)
         if not res:
-            # Fallback to full image or 404
+            # No thumbnail exists and none could be generated - fall back to
+            # the original file only if it's actually an image Pillow just
+            # doesn't handle (thumbnail generation failing doesn't mean
+            # "not an image"). Anything else (docs, archives, and now -
+            # since uploads accept whatever Gmail would - things like .html)
+            # must never be served here with no Content-Disposition and a
+            # Content-Type guessed from the extension: unlike /files/view,
+            # this had no image/* check at all, so this was a real stored-
+            # XSS path the moment a non-image type became uploadable.
             file_path = UPLOAD_DIR / filename
             if not file_path.exists():
                 raise HTTPException(status_code=404, detail="File not found")
+            media_type = mimetypes.guess_type(filename)[0] or ""
+            if not media_type.startswith("image/"):
+                raise HTTPException(status_code=404, detail="No thumbnail available")
             return FileResponse(file_path, headers=get_cache_headers())
-    
+
     return FileResponse(thumb_path, headers=get_cache_headers())
 
 
@@ -248,7 +321,12 @@ def download_file(
 
 
 @router.get("/download/project/{project_id}")
-def download_project_files(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def download_project_files(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     project = get_project(db, project_id)
 
     if not project or not project.file_paths:
@@ -256,32 +334,34 @@ def download_project_files(project_id: int, db: Session = Depends(get_db), curre
 
     mark_project_files_downloaded(db, project)
 
-    from stream_zip import stream_zip, NO_COMPRESSION_64
-    import stat
-    from datetime import datetime
+    # Built to a temp file first rather than streamed straight to the
+    # client - a streaming response's eventual size isn't known upfront, so
+    # it can't set Content-Length, which meant the download progress
+    # indicator had no actual total to show, only bytes-received-so-far.
+    # Serving a real file here gives it one for free, the same way single-
+    # file downloads already report "X of Y" - no frontend changes needed.
+    # Files are stored uncompressed (ZIP_STORED, matching the previous
+    # NO_COMPRESSION_64 streaming version) - this is a fast concatenation,
+    # not real compression work, so building before serving doesn't
+    # meaningfully delay the download starting.
+    temp_zip_dir = UPLOAD_DIR / ".tmp_zips"
+    temp_zip_dir.mkdir(parents=True, exist_ok=True)
+    temp_zip_path = temp_zip_dir / f"{uuid.uuid4().hex}.zip"
 
-    def member_files():
+    with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_STORED) as zf:
         for file_entry in project.file_paths:
-            filename = file_entry.path
-            file_path = UPLOAD_DIR / filename
+            file_path = UPLOAD_DIR / file_entry.path
             if file_path.exists():
-                st = os.stat(file_path)
-                modified_at = datetime.fromtimestamp(st.st_mtime)
-                mode = stat.S_IFREG | 0o644
+                # The in-zip name a person actually sees on extract -
+                # `.path` is only the UUID-based storage name.
+                zf.write(file_path, arcname=file_entry.original_name or file_entry.path)
 
-                def file_chunks():
-                    with open(file_path, "rb") as f:
-                        while chunk := f.read(128 * 1024): # 128KB chunks
-                            yield chunk
+    background_tasks.add_task(lambda: temp_zip_path.unlink(missing_ok=True))
 
-                yield filename, modified_at, mode, NO_COMPRESSION_64, file_chunks()
-
-    return StreamingResponse(
-        stream_zip(member_files()),
+    return FileResponse(
+        temp_zip_path,
         media_type="application/zip",
-        headers={
-            "Content-Disposition": f'attachment; filename="project_{project_id}_files.zip"'
-        }
+        filename=f"project_{project_id}_files.zip",
     )
 
 
@@ -296,6 +376,16 @@ def view_file(filename: str, request: Request, current_user: dict = Depends(get_
     file_size = file_path.stat().st_size
     range_header = request.headers.get("range")
     media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+    # This endpoint exists for inline image preview (see FilePreview.tsx,
+    # which only ever calls it for image files) - never serve anything else
+    # here with a browser-renderable Content-Type. Non-image files already
+    # can't reach upload storage at all (see save_streaming_file's
+    # extension allowlist), but this is the second, independent check: even
+    # a file that predates that allowlist, or reached disk some other way,
+    # still can't be served back as executable/renderable content.
+    if not media_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Not an image file")
 
     def iterfile(start=0, end=file_size - 1):
         with open(file_path, "rb") as f:

@@ -121,6 +121,25 @@ def mark_design_completed(db: Session, project_id: int, username: str):
     return db_project
 
 
+def mark_print_completed(db: Session, project_id: int, username: str):
+    """Idempotent, same reasoning as mark_design_completed. Also flips
+    print_status to Completed - the caller (service_mark_print_completed)
+    has already checked design_completed_at is set, same rule the generic
+    update path enforces for this same transition."""
+    db_project = get_project(db, project_id)
+    if not db_project:
+        return None
+
+    if db_project.print_completed_at is None:
+        db_project.print_completed_at = datetime.utcnow()
+        db_project.print_completed_by = username
+        db_project.print_status = "Completed"
+        db.commit()
+        db.refresh(db_project)
+
+    return db_project
+
+
 def mark_delivered(db: Session, project_id: int, username: str):
     """Idempotent, same reasoning as mark_design_completed."""
     db_project = get_project(db, project_id)

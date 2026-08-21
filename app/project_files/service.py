@@ -1,11 +1,42 @@
 import shutil
 import uuid
 from pathlib import Path
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.entities import Project, ProjectFile
 
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# A denylist, not an allowlist - matches what Gmail itself blocks as an
+# attachment (https://support.google.com/mail/answer/6590), so anything a
+# user could email themselves, they can upload here. This is deliberately
+# permissive (design/CAD files, archives, disk images inside a zip, etc. -
+# whatever isn't independently executable). Gmail's list is safe to copy
+# directly *except* .svg: Gmail never renders an attachment in the page's
+# own origin (always a sandboxed preview or a forced download), but our
+# /files/view endpoint does serve image/* content directly, and SVG is an
+# XML document that can carry a <script> that executes if that URL is ever
+# opened directly rather than just loaded in an <img> tag - a real
+# stored-XSS vector raster formats don't have. Kept out even though Gmail
+# allows it.
+BLOCKED_EXTENSIONS = {
+    ".ade", ".adp", ".apk", ".appx", ".appxbundle",
+    ".bat", ".cab", ".chm", ".cmd", ".com", ".cpl",
+    ".diagcab", ".diagcfg", ".diagpkg", ".dll", ".dmg",
+    ".ex", ".ex_", ".exe",
+    ".hta",
+    ".img", ".ins", ".iso", ".isp",
+    ".jar", ".jnlp", ".js", ".jse",
+    ".lib", ".lnk",
+    ".mde", ".mjs", ".msc", ".msi", ".msix", ".msixbundle", ".msp", ".mst",
+    ".nsh",
+    ".pif", ".ps1",
+    ".scr", ".sct", ".shb", ".svg", ".sys",
+    ".vb", ".vbe", ".vbs", ".vhd", ".vxd",
+    ".wsc", ".wsf", ".wsh",
+    ".xll",
+}
 
 
 def save_streaming_file(upload_file, filename: str):
@@ -13,12 +44,19 @@ def save_streaming_file(upload_file, filename: str):
 
     # Prefix with a short uuid so concurrent/duplicate filenames never collide
     # (this matters now that files can be uploaded before a project exists).
-    ext = Path(filename).suffix
+    ext = Path(filename).suffix.lower()
+    if not ext or ext in BLOCKED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type '{ext or 'unknown'}' isn't allowed.",
+        )
     stored_name = f"{uuid.uuid4().hex}{ext}"
     file_location = UPLOAD_DIR / stored_name
 
+    # 1MB chunks instead of shutil's 64KB default - fewer syscalls per byte
+    # on the large files this app expects (up to 1GB/file).
     with file_location.open("wb") as buffer:
-        shutil.copyfileobj(upload_file.file, buffer)
+        shutil.copyfileobj(upload_file.file, buffer, length=1024 * 1024)
 
     # Thumbnail generation is deferred to the first /files/thumbnail request
     # (see project_files/controller.py) rather than done here, so uploads

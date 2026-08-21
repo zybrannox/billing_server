@@ -45,10 +45,13 @@ class Project(Base):
         return f"{self.customer.first_name} {self.customer.last_name}" if self.customer else None
 
     # Order-lifecycle milestones, set server-side (never client-supplied) by
-    # the dedicated /design-completed and /delivered endpoints. Nullable =
-    # not reached yet. These are the future trigger points for customer
-    # notifications (not implemented yet - see conversation).
+    # the dedicated /design-completed, /print-completed and /delivered
+    # endpoints. Nullable = not reached yet. These are the future trigger
+    # points for customer notifications (not implemented yet - see
+    # conversation).
     design_completed_at = Column(DateTime, nullable=True)
     design_completed_by = Column(String, nullable=True)
+    print_completed_at = Column(DateTime, nullable=True)
+    print_completed_by = Column(String, nullable=True)
     delivered_at = Column(DateTime, nullable=True)
     delivered_by = Column(String, nullable=True)

@@ -11,6 +11,7 @@ from .service import (
     service_delete,
     service_delete_bulk,
     service_mark_design_completed,
+    service_mark_print_completed,
     service_mark_delivered,
 )
 
@@ -86,6 +87,15 @@ def mark_design_completed(
     current_user: dict = Depends(get_current_user),
 ):
     return service_mark_design_completed(db, project_id, current_user["username"])
+
+
+@router.patch("/{project_id}/print-completed", response_model=ProjectRead)
+def mark_print_completed(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    return service_mark_print_completed(db, project_id, current_user["username"])
 
 
 @router.patch("/{project_id}/delivered", response_model=ProjectRead)

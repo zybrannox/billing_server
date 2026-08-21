@@ -9,6 +9,7 @@ from .repository import (
     delete_project,
     delete_projects,
     mark_design_completed,
+    mark_print_completed,
     mark_delivered,
 )
 import math
@@ -84,6 +85,21 @@ def service_mark_design_completed(db: Session, project_id: int, username: str):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return mark_design_completed(db, project_id, username)
+
+
+def service_mark_print_completed(db: Session, project_id: int, username: str):
+    project = get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    # Same rule service_update enforces for this transition via the generic
+    # edit path - the real security boundary lives here and there, not in
+    # the frontend button's disabled state, which is just a UX nicety.
+    if project.print_status != "Completed" and project.design_completed_at is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Print status can only be marked Completed after the design is marked completed",
+        )
+    return mark_print_completed(db, project_id, username)
 
 
 def service_mark_delivered(db: Session, project_id: int, username: str):

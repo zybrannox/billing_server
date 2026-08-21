@@ -63,6 +63,8 @@ class ProjectRead(ProjectBase):
     file_paths: List[FileObject]
     design_completed_at: OptionalUTCDateTime = None
     design_completed_by: Optional[str] = None
+    print_completed_at: OptionalUTCDateTime = None
+    print_completed_by: Optional[str] = None
     delivered_at: OptionalUTCDateTime = None
     delivered_by: Optional[str] = None
     customer_name: Optional[str] = None
