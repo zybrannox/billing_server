@@ -12,6 +12,7 @@ from app.project_files.service import (
 )
 from app.project_files.model import (
     AttachFilesRequest,
+    FileBulkDeleteRequest,
     InitChunkedUploadRequest,
     InitChunkedUploadResponse,
     CompleteChunkedUploadRequest,
@@ -239,6 +240,31 @@ def delete_uploaded_file_endpoint(filename: str, db: Session = Depends(get_db), 
 
     db.commit()
     return {"message": "deleted"}
+
+
+@router.post("/bulk-delete")
+def bulk_delete_files(
+    payload: FileBulkDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Same operation as DELETE /{filename}, batched - one DB round trip
+    for however many files were selected instead of one request per file.
+    Resilient to a file already being gone (skips it, doesn't fail the
+    whole batch) since a multi-select delete shouldn't 404 on the first
+    already-removed entry and abandon the rest."""
+    safe_names = [Path(p).name for p in payload.paths if p]
+    if not safe_names:
+        return {"message": "0 files deleted"}
+
+    deleted_count = sum(1 for name in safe_names if delete_uploaded_file(name))
+
+    db.query(ProjectFile).filter(ProjectFile.path.in_(safe_names)).delete(
+        synchronize_session=False
+    )
+    db.commit()
+
+    return {"message": f"{deleted_count} files deleted"}
 
 
 @router.post("/attach/{project_id}")

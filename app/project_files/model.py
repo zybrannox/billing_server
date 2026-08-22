@@ -14,6 +14,10 @@ class AttachFilesRequest(BaseModel):
     files: List[AttachFileEntry]
 
 
+class FileBulkDeleteRequest(BaseModel):
+    paths: List[str]
+
+
 class InitChunkedUploadRequest(BaseModel):
     filename: str
     total_size: int
