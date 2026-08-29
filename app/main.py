@@ -11,6 +11,7 @@ from app.project_files import file_router
 from app.auth import auth_router
 from app.invoices import invoice_router
 from app.customers import customer_router
+from app.list_options import list_option_router
 from app.middleware import RequestSizeLimitMiddleware
 from app.entities import User, UserRole
 import app.entities
@@ -87,6 +88,7 @@ app.include_router(file_router)
 app.include_router(auth_router)
 app.include_router(invoice_router)
 app.include_router(customer_router)
+app.include_router(list_option_router)
 
 
 @app.get("/")

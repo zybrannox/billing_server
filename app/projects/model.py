@@ -68,6 +68,7 @@ class ProjectRead(ProjectBase):
     delivered_at: OptionalUTCDateTime = None
     delivered_by: Optional[str] = None
     customer_name: Optional[str] = None
+    pinned: bool = False
 
     model_config = {
         "from_attributes": True

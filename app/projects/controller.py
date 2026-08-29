@@ -13,6 +13,7 @@ from .service import (
     service_mark_design_completed,
     service_mark_print_completed,
     service_mark_delivered,
+    service_toggle_pin,
 )
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -105,3 +106,12 @@ def mark_delivered(
     current_user: dict = Depends(get_current_user),
 ):
     return service_mark_delivered(db, project_id, current_user["username"])
+
+
+@router.patch("/{project_id}/pin", response_model=ProjectRead)
+def toggle_pin(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    return service_toggle_pin(db, project_id)

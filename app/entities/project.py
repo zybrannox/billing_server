@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -18,6 +18,12 @@ class Project(Base):
     start_date = Column(DateTime)
     delivery_date = Column(DateTime)
     description = Column(String, nullable=True)
+    # Pinned projects sort to the top of the list (see get_all_projects'
+    # ORDER BY) regardless of the usual status/priority ordering - toggled
+    # via the dedicated /pin endpoint, not the generic update path, same
+    # reasoning as the milestone timestamps below (an explicit action, not
+    # a field you'd bulk-edit alongside unrelated ones).
+    pinned = Column(Boolean, nullable=False, default=False)
     # Nullable: existing projects predate this column, and not every
     # historical row will have a matching customer.
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)

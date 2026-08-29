@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import case, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.entities.project import Project
+from app.entities.customer import Customer
 from .model import ProjectCreate, ProjectUpdate
 
 
@@ -49,23 +50,20 @@ def get_all_projects(
     priority: str | None = None,
     customer_id: int | None = None,
 ):
-    # selectinload, not joinedload, for the paginated list - joinedload on
-    # a one-to-many would LEFT JOIN in every file row before LIMIT/OFFSET
-    # apply, so a project with several files could consume more than one
-    # slot of the page (or get cut off mid-project). selectinload runs a
-    # second `WHERE project_id IN (...)` query against the already-paged
-    # project ids instead, which is both correct and just as cheap.
     query = db.query(Project).options(
         joinedload(Project.customer), selectinload(Project.files)
     )
 
     if search:
         like = f"%{search}%"
-        query = query.filter(
+        query = query.outerjoin(Customer, Project.customer_id == Customer.id).filter(
             or_(
                 Project.project_type.ilike(like),
                 Project.assigned_to.ilike(like),
                 Project.description.ilike(like),
+                Customer.first_name.ilike(like),
+                Customer.last_name.ilike(like),
+                (Customer.first_name + " " + Customer.last_name).ilike(like),
             )
         )
 
@@ -81,7 +79,11 @@ def get_all_projects(
     total = query.count()
 
     items = (
-        query.order_by(_PRINT_STATUS_RANK, _PRIORITY_RANK, Project.id.desc())
+        # Pinned projects always float to the top, ahead of the usual
+        # status/priority ordering - a real sort key (not a client-side
+        # reorder-after-fetch), so it stays correct across pages instead of
+        # only pinning-to-the-top-of-whatever-page-you're-on.
+        query.order_by(Project.pinned.desc(), _PRINT_STATUS_RANK, _PRIORITY_RANK, Project.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -152,6 +154,20 @@ def mark_delivered(db: Session, project_id: int, username: str):
         db.commit()
         db.refresh(db_project)
 
+    return db_project
+
+
+def toggle_pin(db: Session, project_id: int):
+    """Flips pinned on/off - unlike the milestone marks above, pinning is a
+    genuine two-way toggle (a user can freely pin/unpin), not a one-time
+    audited transition, so there's no separate `by`/`at` pair to preserve."""
+    db_project = get_project(db, project_id)
+    if not db_project:
+        return None
+
+    db_project.pinned = not db_project.pinned
+    db.commit()
+    db.refresh(db_project)
     return db_project
 
 

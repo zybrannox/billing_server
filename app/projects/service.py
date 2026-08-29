@@ -11,6 +11,7 @@ from .repository import (
     mark_design_completed,
     mark_print_completed,
     mark_delivered,
+    toggle_pin,
 )
 import math
 from .model import ProjectCreate, ProjectUpdate, ProjectListResponse
@@ -129,6 +130,13 @@ def service_mark_delivered(db: Session, project_id: int, username: str):
 #         raise HTTPException(status_code=404, detail="Project not found")
 #     return {"message": "Project deleted"}
 
+
+
+def service_toggle_pin(db: Session, project_id: int):
+    project = toggle_pin(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
 
 
 def service_delete(db: Session, project_id: int):
