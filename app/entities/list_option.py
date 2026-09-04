@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, UniqueConstraint
 
 from app.database import Base
 
@@ -34,3 +34,10 @@ class ListOption(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Only meaningful for categories that price themselves (currently just
+    # "item_type" - the invoice line-item catalog, see GenerateInvoice.tsx)
+    # - null for every other category, e.g. "project_type", which has
+    # nothing to do with pricing. Kept on this same generic table rather
+    # than a parallel one so "a catalog entry" is still just one row here,
+    # not a second schema to keep in sync.
+    rate = Column(Float, nullable=True)

@@ -25,8 +25,17 @@ class ProjectFile(Base):
     # What the user actually uploaded with - display-only, never used to
     # address the file on disk.
     original_name = Column(String(500), nullable=True)
+    # Physical print size in inches, derived client-side from an assumed
+    # 96 DPI (see utils/appSupport.ts getImageDimensions) - an estimate,
+    # not a fact declared by the file itself.
     width = Column(Float, nullable=True)
     height = Column(Float, nullable=True)
+    # The file's actual pixel dimensions (img.naturalWidth/naturalHeight) -
+    # assumption-free, unlike width/height above. Added so screens that
+    # need an accurate size (e.g. invoice line items) have a real fact to
+    # show instead of a DPI guess.
+    pixel_width = Column(Integer, nullable=True)
+    pixel_height = Column(Integer, nullable=True)
     downloaded = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

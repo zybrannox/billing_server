@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -24,11 +26,12 @@ def get_customers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
+    sort: Literal["name", "most_used"] = Query("name"),
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
     items, total = CustomerService.get_all_customers(
-        db, page=page, page_size=page_size, search=search
+        db, page=page, page_size=page_size, search=search, sort=sort
     )
     total_pages = math.ceil(total / page_size) if page_size else 0
     return CustomerListResponse(

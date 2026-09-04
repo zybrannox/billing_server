@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # A hardcoded allowlist of categories, not free-text - a typo'd category
@@ -9,12 +10,18 @@ from pydantic import BaseModel, field_validator
 # instead of only ever surfacing as "why is my new option not showing up".
 # Add to this tuple (and the frontend's matching field->category mapping)
 # whenever another dropdown moves onto this system.
-VALID_CATEGORIES = ("project_type",)
+VALID_CATEGORIES = ("project_type", "item_type")
+
+# Categories where each option carries a price - see ListOption.rate.
+# "item_type" backs the invoice line-item catalog (Flex/Photo Frame/...
+# each priced per sq ft, see GenerateInvoice.tsx); nothing else uses rate.
+PRICED_CATEGORIES = ("item_type",)
 
 
 class ListOptionCreate(BaseModel):
     category: str
     value: str
+    rate: Optional[float] = Field(default=None, ge=0)
 
     @field_validator("category")
     @classmethod
@@ -31,6 +38,12 @@ class ListOptionCreate(BaseModel):
             raise ValueError("Value cannot be blank")
         return v
 
+    @model_validator(mode="after")
+    def rate_required_for_priced_categories(self) -> "ListOptionCreate":
+        if self.category in PRICED_CATEGORIES and self.rate is None:
+            raise ValueError(f"A rate is required for '{self.category}' options")
+        return self
+
 
 class ListOptionRead(BaseModel):
     id: int
@@ -39,5 +52,6 @@ class ListOptionRead(BaseModel):
     sort_order: int
     is_active: bool
     created_at: datetime
+    rate: Optional[float] = None
 
     model_config = {"from_attributes": True}

@@ -81,6 +81,8 @@ def complete_chunked_upload(
         "original_name": payload.filename,
         "width": payload.width,
         "height": payload.height,
+        "pixel_width": payload.pixel_width,
+        "pixel_height": payload.pixel_height,
     }
 
 
@@ -148,7 +150,9 @@ def upload_files(
             "path": saved_filename,
             "original_name": file.filename,
             "width": meta.get("width"),
-            "height": meta.get("height")
+            "height": meta.get("height"),
+            "pixel_width": meta.get("pixel_width"),
+            "pixel_height": meta.get("pixel_height"),
         }
         saved_files.append(file_entry)
         db.add(ProjectFile(project_id=project.id, **file_entry))
@@ -215,6 +219,8 @@ def upload_files_standalone(
             "original_name": file.filename,
             "width": meta.get("width"),
             "height": meta.get("height"),
+            "pixel_width": meta.get("pixel_width"),
+            "pixel_height": meta.get("pixel_height"),
         })
         # See upload_files above - pre-generates the thumbnail in the
         # background so it's already there by the time anyone views it,
@@ -277,7 +283,14 @@ def attach_files(project_id: int, payload: AttachFilesRequest, db: Session = Dep
         raise HTTPException(status_code=404, detail="Project not found")
 
     entries = [
-        {"path": f.path, "original_name": f.original_name, "width": f.width, "height": f.height}
+        {
+            "path": f.path,
+            "original_name": f.original_name,
+            "width": f.width,
+            "height": f.height,
+            "pixel_width": f.pixel_width,
+            "pixel_height": f.pixel_height,
+        }
         for f in payload.files
     ]
 

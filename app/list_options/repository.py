@@ -25,16 +25,21 @@ def find_by_value(db: Session, category: str, value: str):
     )
 
 
-def create_option(db: Session, category: str, value: str) -> tuple[ListOption, bool]:
+def create_option(
+    db: Session, category: str, value: str, rate: float | None = None
+) -> tuple[ListOption, bool]:
     """Returns (option, created). If a matching option already exists and
     is active, that's a duplicate - the caller decides how to respond. If
     it exists but was deactivated, reactivates and reuses that row instead
-    of inserting a second one for the same value."""
+    of inserting a second one for the same value - and refreshes its rate
+    to whatever was just submitted, in case pricing changed since it was
+    removed."""
     existing = find_by_value(db, category, value)
     if existing:
         if existing.is_active:
             return existing, False
         existing.is_active = True
+        existing.rate = rate
         db.commit()
         db.refresh(existing)
         return existing, True
@@ -48,6 +53,7 @@ def create_option(db: Session, category: str, value: str) -> tuple[ListOption, b
     option = ListOption(
         category=category,
         value=value,
+        rate=rate,
         sort_order=max_sort + 1,
         is_active=True,
     )

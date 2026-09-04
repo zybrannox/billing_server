@@ -10,7 +10,7 @@ def service_list(db: Session, category: str, active_only: bool = True):
 
 
 def service_create(db: Session, payload: ListOptionCreate):
-    option, created = create_option(db, payload.category, payload.value)
+    option, created = create_option(db, payload.category, payload.value, payload.rate)
     if not created:
         raise HTTPException(
             status_code=400,
