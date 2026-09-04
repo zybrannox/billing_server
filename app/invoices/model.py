@@ -128,7 +128,11 @@ class CustomerSummary(BaseModel):
     first_name: str
     last_name: str
     contact_number: str
-    email: str
+    # Optional to match customers.email actually being nullable in the DB
+    # (see the make_customer_email_optional migration) - a required `str`
+    # here crashed this response with a 500 (ResponseValidationError) for
+    # any customer that had no email on file.
+    email: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
