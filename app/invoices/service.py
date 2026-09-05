@@ -12,6 +12,7 @@ from .repository import (
     update_invoice,
     delete_invoice
 )
+from typing import Optional
 from .model import InvoiceCreate, InvoiceUpdate, InvoiceListResponse
 
 def service_create(db: Session, payload: InvoiceCreate):
@@ -181,6 +182,32 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate):
     if not updated:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return updated
+
+def service_mark_paid(
+    db: Session, invoice_id: int, payment_method: str, payment_reference: Optional[str]
+):
+    """Open to any authenticated user (see controller.py) - unlike the
+    generic update this deliberately doesn't go through, this only ever
+    does the one transition it's named for. Same terminal-state rule as
+    service_update's status handling: only while still pending."""
+    invoice = get_invoice(db, invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    if invoice.status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"This invoice is already {invoice.status} - its status can't be changed.",
+        )
+
+    payload = InvoiceUpdate(
+        status="paid", payment_method=payment_method, payment_reference=payment_reference
+    )
+    updated = update_invoice(db, invoice_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return updated
+
 
 def service_delete(db: Session, invoice_id: int):
     success = delete_invoice(db, invoice_id)

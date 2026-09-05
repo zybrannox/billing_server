@@ -68,6 +68,16 @@ class InvoiceUpdate(BaseModel):
     payment_reference: Optional[str] = None
 
 
+# Body for PATCH /invoices/{id}/mark-paid - deliberately just these two
+# fields, not the full InvoiceUpdate. That endpoint is open to any
+# authenticated user (see controller.py); this narrow shape is what keeps
+# it from also becoming a route to the discount/amount edits that stay
+# admin-only via the generic PATCH /invoices/{id}.
+class MarkInvoicePaidRequest(BaseModel):
+    payment_method: PaymentMethod
+    payment_reference: Optional[str] = None
+
+
 class InvoiceRead(BaseModel):
     id: int
     project_id: int

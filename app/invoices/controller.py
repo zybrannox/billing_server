@@ -10,6 +10,7 @@ from .model import (
     InvoiceListResponse,
     InvoicePreviewRead,
     ProjectPaymentStatus,
+    MarkInvoicePaidRequest,
 )
 from .service import (
     service_create,
@@ -20,6 +21,7 @@ from .service import (
     service_get_project_payment_status,
     service_get_latest_invoice_for_project,
     service_update,
+    service_mark_paid,
     service_delete
 )
 
@@ -82,6 +84,21 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db), _admin: dict = D
 @router.patch("/{invoice_id}", response_model=InvoiceRead)
 def update_invoice(invoice_id: int, payload: InvoiceUpdate, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
     return service_update(db, invoice_id, payload)
+
+# Open to any authenticated user, unlike the generic update above - same
+# reasoning as create/preview/deliver: marking your own delivered work as
+# paid is part of finishing it, not a financial-oversight action. Its
+# request body (MarkInvoicePaidRequest) is deliberately narrower than
+# InvoiceUpdate so this can't become a route to the discount/amount edits
+# that stay admin-only.
+@router.patch("/{invoice_id}/mark-paid", response_model=InvoiceRead)
+def mark_invoice_paid(
+    invoice_id: int,
+    payload: MarkInvoicePaidRequest,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    return service_mark_paid(db, invoice_id, payload.payment_method, payload.payment_reference)
 
 @router.delete("/{invoice_id}")
 def delete_invoice(invoice_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
