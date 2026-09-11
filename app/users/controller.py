@@ -6,6 +6,7 @@ from app.database import get_db
 from app.auth.dependencies import require_admin
 from app.users import UserCreate, UserRead, UserUpdate, UserPasswordUpdate
 from app.users import UserService
+from app.users.model import EmployeeProfile
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -43,6 +44,23 @@ async def get_user(
         raise HTTPException(404, "User not found")
 
     return user
+
+
+# Powers the admin Employee Profile page (clicking an employee in the
+# Employees table) - identity, every project assigned to them, and the
+# summary numbers in one call. Admin-only like every other /users endpoint.
+@router.get("/{user_id}/profile", response_model=EmployeeProfile)
+async def get_employee_profile(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    profile = UserService.get_employee_profile(db, user_id)
+
+    if not profile:
+        raise HTTPException(404, "User not found")
+
+    return profile
 
 
 @router.put("/{user_id}", response_model=UserRead)

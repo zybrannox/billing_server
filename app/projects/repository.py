@@ -49,10 +49,25 @@ def get_all_projects(
     print_status: str | None = None,
     priority: str | None = None,
     customer_id: int | None = None,
+    project_id: int | None = None,
+    assigned_to: str | None = None,
 ):
     query = db.query(Project).options(
         joinedload(Project.customer), selectinload(Project.files)
     )
+
+    # Jumping straight to one known project (e.g. from a dashboard/
+    # notification row) - an exact id match, so it deliberately bypasses
+    # every other filter below rather than being ANDed with them.
+    if project_id:
+        query = query.filter(Project.id == project_id)
+
+    # Exact match, not ilike - assigned_to is always set from a real
+    # username (see AddProject's employee picker), never free text, so a
+    # partial/case-insensitive match would only risk pulling in the wrong
+    # employee's work.
+    if assigned_to:
+        query = query.filter(Project.assigned_to == assigned_to)
 
     if search:
         like = f"%{search}%"
@@ -142,8 +157,12 @@ def mark_print_completed(db: Session, project_id: int, username: str):
     return db_project
 
 
-def mark_delivered(db: Session, project_id: int, username: str):
-    """Idempotent, same reasoning as mark_design_completed."""
+def mark_delivered(db: Session, project_id: int, username: str, on_credit: bool = False):
+    """Idempotent, same reasoning as mark_design_completed. `on_credit` is
+    only meaningful on the transition itself (delivered_at was still null)
+    - an already-delivered project's on-credit flag is a historical fact
+    about how that delivery actually happened, not something a repeat call
+    should be able to flip after the fact."""
     db_project = get_project(db, project_id)
     if not db_project:
         return None
@@ -151,6 +170,7 @@ def mark_delivered(db: Session, project_id: int, username: str):
     if db_project.delivered_at is None:
         db_project.delivered_at = datetime.utcnow()
         db_project.delivered_by = username
+        db_project.delivered_on_credit = on_credit
         db.commit()
         db.refresh(db_project)
 

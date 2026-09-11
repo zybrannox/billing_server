@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,6 +28,14 @@ class InvoiceItem(Base):
     sq_ft: Mapped[float] = mapped_column(Float, nullable=False)
     rate: Mapped[float] = mapped_column(Float, nullable=False)
     total: Mapped[float] = mapped_column(Float, nullable=False)
+    # True when this line's Total was typed directly in the create form
+    # (see GenerateInvoice.tsx) rather than the ordinary rate-times-area
+    # flow - `rate` is still always populated either way (back-derived as
+    # total ÷ area so the math stays consistent), but it was never really
+    # "the rate", just a number solved for algebraically, so the invoice
+    # view hides it for these rows instead of showing a number nobody
+    # actually entered.
+    is_manual_total: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     invoice = relationship("Invoice", back_populates="items")

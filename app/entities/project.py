@@ -61,3 +61,11 @@ class Project(Base):
     print_completed_by = Column(String, nullable=True)
     delivered_at = Column(DateTime, nullable=True)
     delivered_by = Column(String, nullable=True)
+    # True when this delivery was explicitly made "on credit" - the invoice
+    # was still unpaid at the time (see DeliveryCheck.tsx's "Deliver on
+    # Credit" action), a deliberate business decision to hand the order
+    # over on trust rather than an oversight. Kept as its own flag instead
+    # of just inferring "delivered while invoice.status == pending", since
+    # the invoice can later be marked paid (settling the credit) while this
+    # stays true as the historical record of how the delivery happened.
+    delivered_on_credit = Column(Boolean, nullable=False, default=False)

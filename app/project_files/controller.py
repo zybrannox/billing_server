@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form, B
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 from app.projects.repository import get_project
 from app.project_files.service import (
     save_streaming_file,
@@ -19,6 +19,7 @@ from app.project_files.model import (
 )
 from app.project_files.utils import generate_thumbnail
 from app.project_files import chunked
+from app.project_files.retention import purge_stale_originals
 from app.entities import ProjectFile
 from typing import List
 from pathlib import Path
@@ -340,6 +341,16 @@ def download_file(
 
     file_path = UPLOAD_DIR / filename
     if not file_path.exists():
+        # Distinguish "auto-removed by the weekly retention job" from a
+        # plain missing/bad filename - same on-disk symptom, very different
+        # explanation, and the frontend shouldn't have to guess which.
+        record = db.query(ProjectFile).filter(ProjectFile.path == filename).first()
+        if record and record.original_deleted_at:
+            raise HTTPException(
+                status_code=410,
+                detail="This file's original was automatically removed after "
+                "7 days on a completed project. Only the thumbnail remains.",
+            )
         raise HTTPException(status_code=404, detail="File not found")
 
     # mark_file_downloaded scans every project with any files to find which
@@ -405,11 +416,23 @@ def download_project_files(
 
 
 @router.get("/view/{filename}")
-def view_file(filename: str, request: Request, current_user: dict = Depends(get_current_user)):
+def view_file(
+    filename: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     from .utils import get_cache_headers
 
     file_path = UPLOAD_DIR / filename
     if not file_path.exists():
+        record = db.query(ProjectFile).filter(ProjectFile.path == filename).first()
+        if record and record.original_deleted_at:
+            raise HTTPException(
+                status_code=410,
+                detail="This file's original was automatically removed after "
+                "7 days on a completed project. Only the thumbnail remains.",
+            )
         raise HTTPException(status_code=404, detail="File not found")
 
     file_size = file_path.stat().st_size
@@ -460,3 +483,13 @@ def view_file(filename: str, request: Request, current_user: dict = Depends(get_
         media_type=media_type,
         headers={"Accept-Ranges": "bytes", **get_cache_headers()},
     )
+
+
+@router.post("/purge-stale")
+def purge_stale_files(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
+    """Manually runs the weekly storage-retention job on demand (see
+    app/project_files/retention.py and the scheduled call in app/main.py).
+    Admin-only, since it permanently deletes original files - useful for
+    ops (run it right now instead of waiting for Sunday) and for verifying
+    the job actually does what it says without waiting a week."""
+    return purge_stale_originals(db)

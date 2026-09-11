@@ -23,6 +23,20 @@ def service_create(db: Session, payload: InvoiceCreate):
     if not project_exists:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # A project can legitimately end up with more than one invoice over
+    # its lifetime (a cancelled one re-invoiced), but never two open at
+    # once - without this, a retried request (the network drops the
+    # response after the first invoice was already created, a double-
+    # click, the frontend's own post-create "mark design completed" call
+    # failing and leaving the Generate Invoice button re-enabled - see
+    # GenerateInvoice.tsx) can silently double-bill the same order.
+    existing = get_latest_invoice_for_project(db, payload.project_id)
+    if existing and existing.status == "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"This project already has a pending invoice ({existing.invoice_number}) - cancel it first to raise a new one.",
+        )
+
     subtotal = compute_invoice_total(payload.items)
 
     if payload.discount_amount > subtotal:
@@ -48,8 +62,14 @@ def service_create(db: Session, payload: InvoiceCreate):
 
     return create_invoice(db, payload)
 
-def service_list(db: Session, page: int = 1, page_size: int = 20, search: str | None = None) -> InvoiceListResponse:
-    items, total = get_all_invoices(db, page=page, page_size=page_size, search=search)
+def service_list(
+    db: Session,
+    page: int = 1,
+    page_size: int = 20,
+    search: str | None = None,
+    customer_id: int | None = None,
+) -> InvoiceListResponse:
+    items, total = get_all_invoices(db, page=page, page_size=page_size, search=search, customer_id=customer_id)
     total_pages = math.ceil(total / page_size) if page_size else 0
     return InvoiceListResponse(
         items=items,
@@ -178,6 +198,27 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate):
             )
         payload = payload.model_copy(update={"amount": new_amount})
 
+    # advance_amount drives balance_due (amount - advance_amount, floored
+    # at 0 - see Invoice.balance_due) - left unchecked, an advance larger
+    # than the total just silently clamps to a 0 balance instead of
+    # surfacing the mistake, and editing it once an invoice is already
+    # paid/cancelled would disagree with money that's already been
+    # reconciled, same as discount_amount above. Checked against the
+    # possibly-just-recomputed amount (if discount also changed in this
+    # same request), not the stale pre-discount one.
+    if payload.advance_amount is not None and payload.advance_amount != invoice.advance_amount:
+        if invoice.status != "pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"This invoice is already {invoice.status} - its advance amount can't be changed.",
+            )
+        effective_amount = payload.amount if payload.amount is not None else invoice.amount
+        if payload.advance_amount > effective_amount:
+            raise HTTPException(
+                status_code=400,
+                detail="Advance amount can't exceed the invoice total",
+            )
+
     updated = update_invoice(db, invoice_id, payload)
     if not updated:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -200,8 +241,16 @@ def service_mark_paid(
             detail=f"This invoice is already {invoice.status} - its status can't be changed.",
         )
 
+    # advance_amount must move to the full amount here - balance_due is
+    # amount - advance_amount (see Invoice.balance_due), so without this a
+    # "paid" invoice keeps showing whatever partial advance (or none) was
+    # on record as still owed, contradicting its own status everywhere it's
+    # displayed (Billing tab, Customer Profile, dashboard).
     payload = InvoiceUpdate(
-        status="paid", payment_method=payment_method, payment_reference=payment_reference
+        status="paid",
+        payment_method=payment_method,
+        payment_reference=payment_reference,
+        advance_amount=invoice.amount,
     )
     updated = update_invoice(db, invoice_id, payload)
     if not updated:

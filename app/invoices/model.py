@@ -17,6 +17,12 @@ class InvoiceItemCreate(BaseModel):
     width: float = Field(gt=0)
     height: float = Field(gt=0)
     rate: float = Field(ge=0)
+    # True when the client typed a Total directly and back-derived this
+    # rate from it (rate = total ÷ area) rather than the rate being what
+    # was actually entered - see InvoiceItem.is_manual_total. `rate` is
+    # still required and still drives the stored total either way; this
+    # only controls whether the invoice view shows it.
+    is_manual_total: bool = False
 
 
 class InvoiceItemRead(BaseModel):
@@ -27,6 +33,7 @@ class InvoiceItemRead(BaseModel):
     sq_ft: float
     rate: float
     total: float
+    is_manual_total: bool
     sort_order: int
 
     model_config = {"from_attributes": True}

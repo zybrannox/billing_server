@@ -54,6 +54,7 @@ def create_invoice(db: Session, payload: InvoiceCreate):
                     sq_ft=sq_ft,
                     rate=item.rate,
                     total=line_total,
+                    is_manual_total=item.is_manual_total,
                     sort_order=idx,
                 )
             )
@@ -103,7 +104,13 @@ def get_invoice(db: Session, invoice_id: int):
         .first()
     )
 
-def get_all_invoices(db: Session, page: int = 1, page_size: int = 20, search: str | None = None):
+def get_all_invoices(
+    db: Session,
+    page: int = 1,
+    page_size: int = 20,
+    search: str | None = None,
+    customer_id: int | None = None,
+):
     # Previously returned every invoice ever created, unpaginated - fine
     # with a handful of rows, but the response only grows over time (unlike
     # projects, invoices are never really "done" and cleared out), so this
@@ -119,22 +126,29 @@ def get_all_invoices(db: Session, page: int = 1, page_size: int = 20, search: st
         joinedload(Invoice.project).joinedload(Project.customer)
     )
 
+    # Both branches below need the same Project/Customer join, so it's
+    # done once here rather than risking two joins (or a missing one) if
+    # search and customer_id are ever both passed at once.
+    if search or customer_id:
+        query = query.outerjoin(Project, Invoice.project_id == Project.id).outerjoin(
+            Customer, Project.customer_id == Customer.id
+        )
+
     if search:
         # Matches on the invoice number itself, or who/what it's for -
         # exactly the three things admins actually scan the list for (see
         # conversation: "hard to track who's invoice it is and for which
         # project it is").
         like = f"%{search}%"
-        query = (
-            query.outerjoin(Project, Invoice.project_id == Project.id)
-            .outerjoin(Customer, Project.customer_id == Customer.id)
-            .filter(
-                Invoice.invoice_number.ilike(like)
-                | Project.project_type.ilike(like)
-                | Customer.first_name.ilike(like)
-                | Customer.last_name.ilike(like)
-            )
+        query = query.filter(
+            Invoice.invoice_number.ilike(like)
+            | Project.project_type.ilike(like)
+            | Customer.first_name.ilike(like)
+            | Customer.last_name.ilike(like)
         )
+
+    if customer_id:
+        query = query.filter(Project.customer_id == customer_id)
 
     query = query.order_by(Invoice.created_at.desc())
     total = query.count()

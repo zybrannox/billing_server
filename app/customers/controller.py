@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth.dependencies import require_admin, get_current_user
-from app.customers.model import CustomerCreate, CustomerUpdate, CustomerRead, CustomerListResponse
+from app.customers.model import CustomerCreate, CustomerUpdate, CustomerRead, CustomerListResponse, CustomerProfile
 from app.customers.service import CustomerService
 import math
 
@@ -51,6 +51,24 @@ def get_customer(
         raise HTTPException(404, "Customer not found")
 
     return customer
+
+
+# Powers the admin Customer Profile page (clicking a customer in the
+# Customers table) - identity, every order, every invoice, and the summary
+# numbers in one call. Admin-only like the Billing page this replaces, since
+# it surfaces the same financial detail (amounts, balances, invoice status).
+@router.get("/{customer_id}/profile", response_model=CustomerProfile)
+def get_customer_profile(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    profile = CustomerService.get_customer_profile(db, customer_id)
+
+    if not profile:
+        raise HTTPException(404, "Customer not found")
+
+    return profile
 
 
 @router.put("/{customer_id}", response_model=CustomerRead)

@@ -52,6 +52,12 @@ class FileObject(BaseModel):
     # by the /files/download endpoints so every user sees the same state,
     # rather than tracking it per-browser on the client.
     downloaded: Optional[bool] = None
+    # Set once the weekly retention job (app/project_files/retention.py)
+    # has permanently deleted the original from disk - null means it's
+    # still there. The thumbnail and this row survive either way, so the
+    # frontend uses this to show a "removed, thumbnail only" state instead
+    # of offering a download that would 410.
+    original_deleted_at: OptionalUTCDateTime = None
 
     # Read directly from ProjectFile ORM rows now (see entities/project.py's
     # `file_paths` property), not just from plain JSON dicts.
@@ -67,6 +73,7 @@ class ProjectRead(ProjectBase):
     print_completed_by: Optional[str] = None
     delivered_at: OptionalUTCDateTime = None
     delivered_by: Optional[str] = None
+    delivered_on_credit: bool = False
     customer_name: Optional[str] = None
     pinned: bool = False
 

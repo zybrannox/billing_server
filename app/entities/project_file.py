@@ -38,5 +38,11 @@ class ProjectFile(Base):
     pixel_height = Column(Integer, nullable=True)
     downloaded = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Set when the weekly retention job (see app/project_files/retention.py)
+    # permanently deletes the original file from disk to save storage -
+    # null means the original is still there. The thumbnail and this row
+    # (path, original_name, dimensions) are kept either way, so the UI can
+    # still show what the file was even after the original is gone.
+    original_deleted_at = Column(DateTime, nullable=True)
 
     project = relationship("Project", back_populates="files")

@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session, selectinload
 from fastapi import HTTPException
 from app.entities.project import Project
+from app.invoices.repository import get_latest_invoice_for_project
 from .repository import (
     create_project,
     get_project,
@@ -37,6 +38,8 @@ def service_list(
     print_status: str | None = None,
     priority: str | None = None,
     customer_id: int | None = None,
+    project_id: int | None = None,
+    assigned_to: str | None = None,
 ) -> ProjectListResponse:
     items, total = get_all_projects(
         db,
@@ -46,6 +49,8 @@ def service_list(
         print_status=print_status,
         priority=priority,
         customer_id=customer_id,
+        project_id=project_id,
+        assigned_to=assigned_to,
     )
     total_pages = math.ceil(total / page_size) if page_size else 0
     return ProjectListResponse(
@@ -103,7 +108,13 @@ def service_mark_print_completed(db: Session, project_id: int, username: str):
     return mark_print_completed(db, project_id, username)
 
 
-def service_mark_delivered(db: Session, project_id: int, username: str):
+def service_mark_delivered(
+    db: Session,
+    project_id: int,
+    username: str,
+    on_credit: bool = False,
+    is_admin: bool = False,
+):
     project = get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -121,7 +132,40 @@ def service_mark_delivered(db: Session, project_id: int, username: str):
             status_code=400,
             detail="Print status must be Completed before the order can be marked delivered",
         )
-    return mark_delivered(db, project_id, username)
+
+    # Payment is only checked on the actual transition - a repeat call on
+    # an already-delivered project is a no-op in the repository layer, and
+    # delivered_on_credit is a historical fact about how that delivery
+    # happened, not something worth re-validating on every idempotent retry.
+    if project.delivered_at is None:
+        invoice = get_latest_invoice_for_project(db, project_id)
+        if not invoice:
+            raise HTTPException(
+                status_code=400,
+                detail="This project must be invoiced before it can be delivered",
+            )
+        if on_credit:
+            # "Deliver on Credit" is a deliberate business decision to ship
+            # unpaid work - previously only the frontend restricted this to
+            # admins (DeliveryCheck.tsx's canDeliverOnCredit); enforced here
+            # too so a direct API call can't let any employee authorize it.
+            if not is_admin:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only an admin can authorize a delivery on credit",
+                )
+            if invoice.status != "pending":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Delivering on credit only applies to a still-unpaid invoice",
+                )
+        elif invoice.status != "paid":
+            raise HTTPException(
+                status_code=400,
+                detail="This project's invoice must be paid before it can be delivered - use 'Deliver on Credit' if payment is still pending",
+            )
+
+    return mark_delivered(db, project_id, username, on_credit=on_credit)
 
 
 # def service_delete(db: Session, project_id: int):

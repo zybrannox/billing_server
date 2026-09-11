@@ -49,6 +49,27 @@ class AttentionProject(BaseModel):
     print_status: str
     delivery_date: OptionalUTCDateTime = None
     is_overdue: bool
+    # True when this row is here because it was delivered on credit and
+    # is still unpaid (see get_attention_projects) - distinct from
+    # is_overdue, since a delivered project's delivery_date is no longer
+    # the relevant deadline; what matters now is collecting payment.
+    is_credit_unpaid: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class RecentDelivery(BaseModel):
+    id: int
+    project_type: str
+    customer_name: Optional[str] = None
+    delivered_at: UTCDateTime
+    delivered_by: Optional[str] = None
+    delivered_on_credit: bool
+    # The project's current invoice status ("paid"/"pending"/"cancelled"),
+    # or null if it somehow has no invoice at all. Lets the panel show a
+    # credit delivery as "still unpaid" right up until it's actually
+    # settled, rather than looking identical to a normal delivery.
+    payment_status: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -66,4 +87,5 @@ class DashboardSummary(BaseModel):
     revenue_trend: List[RevenuePoint]
     recent_invoices: List[RecentInvoice]
     attention_projects: List[AttentionProject]
+    recent_deliveries: List[RecentDelivery]
     top_customers: List[TopCustomer]

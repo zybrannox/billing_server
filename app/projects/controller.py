@@ -32,6 +32,8 @@ def list_projects(
     print_status: str | None = None,
     priority: str | None = None,
     customer_id: int | None = None,
+    project_id: int | None = None,
+    assigned_to: str | None = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
@@ -43,6 +45,8 @@ def list_projects(
         print_status=print_status,
         priority=priority,
         customer_id=customer_id,
+        project_id=project_id,
+        assigned_to=assigned_to,
     )
 
 
@@ -102,10 +106,17 @@ def mark_print_completed(
 @router.patch("/{project_id}/delivered", response_model=ProjectRead)
 def mark_delivered(
     project_id: int,
+    on_credit: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    return service_mark_delivered(db, project_id, current_user["username"])
+    return service_mark_delivered(
+        db,
+        project_id,
+        current_user["username"],
+        on_credit=on_credit,
+        is_admin=current_user.get("role") == "admin",
+    )
 
 
 @router.patch("/{project_id}/pin", response_model=ProjectRead)

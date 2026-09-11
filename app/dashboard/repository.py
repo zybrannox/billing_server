@@ -1,11 +1,27 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.entities.customer import Customer
 from app.entities.invoice import Invoice
 from app.entities.project import Project
+
+
+def _latest_invoice_status_subquery():
+    """A project can end up with more than one invoice over time (a
+    cancelled one re-invoiced) - correlated so it always resolves to the
+    most recently created one for whichever Project row it's compared
+    against, matching get_latest_invoice_for_project's own definition of
+    "latest" (see app/invoices/repository.py)."""
+    return (
+        select(Invoice.status)
+        .where(Invoice.project_id == Project.id)
+        .order_by(Invoice.created_at.desc())
+        .limit(1)
+        .correlate(Project)
+        .scalar_subquery()
+    )
 
 
 def get_stats(db: Session) -> dict:
@@ -165,15 +181,49 @@ def get_recent_invoices(db: Session, limit: int = 6):
 
 
 def get_attention_projects(db: Session, limit: int = 8):
+    """Two independent reasons a project needs eyes on it:
+      1. Not yet delivered, and either Urgent or already past its delivery
+         date (the original rule).
+      2. Delivered *on credit* (Project.delivered_on_credit) whose invoice
+         is still unpaid - this used to disappear from here entirely the
+         moment it was delivered (the query required delivered_at IS NULL,
+         which a credit delivery obviously fails), even though a delivered-
+         but-unpaid order is if anything more worth following up on than
+         one still sitting on the shelf. Ordered credit-unpaid-first: once
+         the goods are gone there's no more leverage to get paid, so those
+         are the most time-sensitive entries here.
+    """
     now = datetime.utcnow()
+    not_yet_delivered = and_(
+        Project.delivered_at.is_(None),
+        (Project.priority == "Urgent") | (Project.delivery_date < now),
+    )
+    credit_unpaid = and_(
+        Project.delivered_on_credit.is_(True),
+        _latest_invoice_status_subquery() == "pending",
+    )
     return (
         db.query(Project)
         .options(joinedload(Project.customer))
-        .filter(
-            Project.delivered_at.is_(None),
-            (Project.priority == "Urgent") | (Project.delivery_date < now),
-        )
-        .order_by(Project.delivery_date.asc().nulls_last())
+        .filter(or_(not_yet_delivered, credit_unpaid))
+        .order_by(Project.delivered_on_credit.desc(), Project.delivery_date.asc().nulls_last())
+        .limit(limit)
+        .all()
+    )
+
+
+def get_recent_deliveries(db: Session, limit: int = 6):
+    """Feeds the Dashboard's "Recent Deliveries" panel - the closest thing
+    this app has to a delivery notification feed: every project that's
+    been marked Delivered, most recent first, each carrying its current
+    payment state so a credit delivery reads as "delivered, still unpaid"
+    rather than looking indistinguishable from a normal paid-then-
+    delivered order."""
+    return (
+        db.query(Project)
+        .options(joinedload(Project.customer))
+        .filter(Project.delivered_at.isnot(None))
+        .order_by(Project.delivered_at.desc())
         .limit(limit)
         .all()
     )

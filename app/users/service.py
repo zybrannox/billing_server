@@ -4,6 +4,8 @@ from passlib.hash import bcrypt
 from app.entities import User, UserRole
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
+from app.projects.repository import get_all_projects
+from app.users.model import EmployeeStats, EmployeeProfile
 
 
 class UserService:
@@ -86,6 +88,38 @@ class UserService:
         return db.execute(
             select(User).where(User.id == user_id)
         ).scalar_one_or_none()
+
+    # One call for the whole profile page (see EmployeeProfile) - identity,
+    # every project assigned to this employee, and the summary numbers -
+    # instead of the frontend firing separate requests. Matched by username
+    # since that's the only link Project.assigned_to actually stores (see
+    # EmployeeStats' docstring); page_size is generous rather than paginated
+    # for the same reason as CustomerService.get_customer_profile - one
+    # employee's own work history is small enough to show in full here.
+    @staticmethod
+    def get_employee_profile(db: Session, user_id: int) -> EmployeeProfile | None:
+        user = UserService.get_user_by_id(db, user_id)
+        if not user:
+            return None
+
+        projects, _ = get_all_projects(db, page=1, page_size=500, assigned_to=user.username)
+
+        active_assigned = sum(1 for p in projects if p.delivered_at is None)
+        designs_completed = sum(1 for p in projects if p.design_completed_by == user.username)
+        prints_completed = sum(1 for p in projects if p.print_completed_by == user.username)
+        deliveries_completed = sum(1 for p in projects if p.delivered_by == user.username)
+
+        return EmployeeProfile(
+            user=user,
+            stats=EmployeeStats(
+                total_assigned=len(projects),
+                active_assigned=active_assigned,
+                designs_completed=designs_completed,
+                prints_completed=prints_completed,
+                deliveries_completed=deliveries_completed,
+            ),
+            projects=projects,
+        )
 
     @staticmethod
     def update_user(db: Session, user_id: int, update):
