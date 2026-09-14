@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Literal, Optional
 from datetime import datetime
 from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
@@ -8,6 +8,13 @@ from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
 # hand, a UPI transfer, etc.), purely for the record.
 PaymentMethod = Literal["Cash", "UPI", "Bank Transfer", "Card", "Cheque", "Other"]
 
+# Not every job is naturally measured in feet - a name board is more
+# usefully entered as "18in x 6in" than "1.5ft x 0.5ft". The rate stays
+# per-square-foot regardless (see calculations.compute_line, which
+# converts sq inches -> sq ft at 144 sq in/sq ft when unit="in"); this
+# only changes what unit width/height were actually typed in.
+MeasurementUnit = Literal["ft", "in"]
+
 
 class InvoiceItemCreate(BaseModel):
     description: Optional[str] = None
@@ -16,7 +23,13 @@ class InvoiceItemCreate(BaseModel):
     # but never negative.
     width: float = Field(gt=0)
     height: float = Field(gt=0)
+    unit: MeasurementUnit = "ft"
     rate: float = Field(ge=0)
+    # How many identical pieces this one line bills for (e.g. 10 identical
+    # name boards at the same size/rate) - `total` is width x height x
+    # rate x pieces (see calculations.compute_line), so this is a real
+    # multiplier on the bill, not just a display note.
+    pieces: int = Field(default=1, ge=1)
     # True when the client typed a Total directly and back-derived this
     # rate from it (rate = total ÷ area) rather than the rate being what
     # was actually entered - see InvoiceItem.is_manual_total. `rate` is
@@ -30,8 +43,10 @@ class InvoiceItemRead(BaseModel):
     description: Optional[str] = None
     width: float
     height: float
+    unit: MeasurementUnit
     sq_ft: float
     rate: float
+    pieces: int
     total: float
     is_manual_total: bool
     sort_order: int
@@ -39,8 +54,31 @@ class InvoiceItemRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Lets an invoice be raised for a job that has no project record yet - the
+# admin topbar's "Create Invoice" shortcut (see GenerateInvoice.tsx) is a
+# single-page, single-submit screen like a Zoho Books invoice: just who
+# it's billed to, what it's for, and the line items - not a work-tracking
+# form. The Project and Invoice are still created together in one
+# transaction (see repository.create_invoice), but neither the
+# project-management fields a real tracked job would have (assignee,
+# priority, client status, start/delivery dates) nor a free-text
+# description are asked for here - a real invoice doesn't carry a job
+# description, just what's billed on it (the line items already say what
+# each item is). Assignee/priority/etc. get fixed defaults server-side
+# (see create_invoice), since this project exists purely to hang the
+# invoice off of, not to be scheduled or assigned like ordinary work
+# coming through Projects.
+class InvoiceNewProject(BaseModel):
+    project_type: str
+    customer_id: int
+
+
 class InvoiceCreate(BaseModel):
-    project_id: int
+    # Exactly one of these must be set (see exactly_one_project_source) -
+    # project_id for invoicing a job already tracked as a Project,
+    # new_project to raise the invoice and create that Project together.
+    project_id: Optional[int] = None
+    new_project: Optional[InvoiceNewProject] = None
     due_date: OptionalUTCDateTime = None
     # `amount` is deliberately not accepted here - it's derived server-side
     # from `items` (see create_invoice) so a client can never hand the API
@@ -64,6 +102,14 @@ class InvoiceCreate(BaseModel):
             raise ValueError("An invoice needs at least one line item")
         return v
 
+    @model_validator(mode="after")
+    def exactly_one_project_source(self):
+        if bool(self.project_id) == bool(self.new_project):
+            raise ValueError(
+                "Provide either project_id (an existing project) or new_project (to create one), not both or neither"
+            )
+        return self
+
 
 class InvoiceUpdate(BaseModel):
     status: Optional[str] = None
@@ -73,6 +119,10 @@ class InvoiceUpdate(BaseModel):
     advance_amount: Optional[float] = Field(default=None, ge=0)
     payment_method: Optional[PaymentMethod] = None
     payment_reference: Optional[str] = None
+    # Set by service_update/service_mark_paid when a status change lands on
+    # "paid" (see app/invoices/service.py) - not meant to be set directly
+    # by a caller, same as `amount` above.
+    paid_at: Optional[datetime] = None
 
 
 # Body for PATCH /invoices/{id}/mark-paid - deliberately just these two
@@ -103,6 +153,10 @@ class InvoiceRead(BaseModel):
     # INV-2026-XXXXX with no way to tell whose order it is.
     customer_name: Optional[str] = None
     project_type: Optional[str] = None
+    # A customer's invoices often share the same project_type - this is
+    # what actually distinguishes one job from another at a glance (see
+    # entities/invoice.py's project_description property).
+    project_description: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

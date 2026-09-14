@@ -1,7 +1,9 @@
 import math
+from datetime import datetime
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.entities.project import Project
+from app.entities.customer import Customer
 from .calculations import compute_invoice_total
 from .repository import (
     create_invoice,
@@ -15,27 +17,32 @@ from .repository import (
 from typing import Optional
 from .model import InvoiceCreate, InvoiceUpdate, InvoiceListResponse
 
-def service_create(db: Session, payload: InvoiceCreate):
-    # FK alone would turn a bad project_id into a raw 500 (constraint
-    # violation) - check up front so a stale/mistyped project id in the
-    # request surfaces as an ordinary 404 instead.
-    project_exists = db.query(Project.id).filter(Project.id == payload.project_id).first()
-    if not project_exists:
-        raise HTTPException(status_code=404, detail="Project not found")
+def service_create(db: Session, payload: InvoiceCreate, username: str):
+    if payload.project_id:
+        # FK alone would turn a bad project_id into a raw 500 (constraint
+        # violation) - check up front so a stale/mistyped project id in the
+        # request surfaces as an ordinary 404 instead.
+        project_exists = db.query(Project.id).filter(Project.id == payload.project_id).first()
+        if not project_exists:
+            raise HTTPException(status_code=404, detail="Project not found")
 
-    # A project can legitimately end up with more than one invoice over
-    # its lifetime (a cancelled one re-invoiced), but never two open at
-    # once - without this, a retried request (the network drops the
-    # response after the first invoice was already created, a double-
-    # click, the frontend's own post-create "mark design completed" call
-    # failing and leaving the Generate Invoice button re-enabled - see
-    # GenerateInvoice.tsx) can silently double-bill the same order.
-    existing = get_latest_invoice_for_project(db, payload.project_id)
-    if existing and existing.status == "pending":
-        raise HTTPException(
-            status_code=400,
-            detail=f"This project already has a pending invoice ({existing.invoice_number}) - cancel it first to raise a new one.",
-        )
+        # A project can legitimately end up with more than one invoice over
+        # its lifetime (a cancelled one re-invoiced), but never two open at
+        # once - without this, a retried request (the network drops the
+        # response after the first invoice was already created, a double-
+        # click) can silently double-bill the same order.
+        existing = get_latest_invoice_for_project(db, payload.project_id)
+        if existing and existing.status == "pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"This project already has a pending invoice ({existing.invoice_number}) - cancel it first to raise a new one.",
+            )
+    else:
+        # new_project path - same up-front check, against the customer this
+        # brand-new project/invoice would belong to instead of a project id.
+        customer_exists = db.query(Customer.id).filter(Customer.id == payload.new_project.customer_id).first()
+        if not customer_exists:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
     subtotal = compute_invoice_total(payload.items)
 
@@ -60,7 +67,7 @@ def service_create(db: Session, payload: InvoiceCreate):
                 detail="Advance amount can't exceed the invoice total",
             )
 
-    return create_invoice(db, payload)
+    return create_invoice(db, payload, username)
 
 def service_list(
     db: Session,
@@ -171,6 +178,12 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate):
             )
         if payload.status not in VALID_STATUSES:
             raise HTTPException(status_code=400, detail=f"Unknown status '{payload.status}'")
+        if payload.status == "paid":
+            # Revenue reporting (dashboard/repository.py) buckets by when an
+            # invoice actually became paid, not created_at - has to be set
+            # on this path too, not just service_mark_paid below, since
+            # this generic admin update can also land status on "paid".
+            payload = payload.model_copy(update={"paid_at": datetime.utcnow()})
 
     # Discount can only move while the invoice is still pending - once
     # it's paid or cancelled, changing it would silently disagree with
@@ -251,6 +264,7 @@ def service_mark_paid(
         payment_method=payment_method,
         payment_reference=payment_reference,
         advance_amount=invoice.amount,
+        paid_at=datetime.utcnow(),
     )
     updated = update_invoice(db, invoice_id, payload)
     if not updated:

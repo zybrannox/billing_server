@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import List, Literal, Optional
 from app.projects.model import ProjectRead
 from app.invoices.model import InvoiceRead
+from app.quotations.model import QuotationRead
 
 
 class CustomerBase(BaseModel):
@@ -67,3 +68,4 @@ class CustomerProfile(BaseModel):
     stats: CustomerStats
     projects: List[ProjectRead]
     invoices: List[InvoiceRead]
+    quotations: List[QuotationRead]

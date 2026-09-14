@@ -25,8 +25,20 @@ class InvoiceItem(Base):
     description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     width: Mapped[float] = mapped_column(Float, nullable=False)
     height: Mapped[float] = mapped_column(Float, nullable=False)
+    # The unit width/height were actually entered in ("ft" or "in") - not
+    # every job is naturally measured in feet (a name board is more usefully
+    # "18in x 6in" than "1.5ft x 0.5ft"). `sq_ft` below is always the
+    # canonical billing quantity in square feet either way (see
+    # app/invoices/calculations.py's compute_line), so this only affects
+    # how width/height are displayed, not how the total is computed.
+    unit: Mapped[str] = mapped_column(String(4), nullable=False, default="ft")
     sq_ft: Mapped[float] = mapped_column(Float, nullable=False)
     rate: Mapped[float] = mapped_column(Float, nullable=False)
+    # How many identical pieces this line bills for - `total` already has
+    # this multiplied in (see app/invoices/calculations.py's compute_line),
+    # stored separately so the printed invoice can show "x N" rather than
+    # only the already-multiplied total.
+    pieces: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     total: Mapped[float] = mapped_column(Float, nullable=False)
     # True when this line's Total was typed directly in the create form
     # (see GenerateInvoice.tsx) rather than the ordinary rate-times-area

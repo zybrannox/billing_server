@@ -35,6 +35,15 @@ class Invoice(Base):
     advance_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     payment_method: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     payment_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # When this invoice actually became "paid" (set in service_mark_paid and
+    # service_update - see app/invoices/service.py), distinct from
+    # created_at. Revenue reporting (dashboard/repository.py's
+    # revenue_this_month/get_revenue_trend) buckets by this, not
+    # created_at - an invoice is routinely created well before the money
+    # actually comes in (an advance now, the balance weeks later), so
+    # bucketing by creation date would put revenue in the wrong period
+    # entirely. Nullable: existing paid invoices predate this column.
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     project = relationship("Project")
@@ -65,3 +74,12 @@ class Invoice(Base):
     @property
     def project_type(self) -> Optional[str]:
         return self.project.project_type if self.project else None
+
+    # A customer's invoices often share the same project_type ("Flex" for
+    # every banner job, say) - not enough on its own to tell two invoices
+    # apart at a glance (see admin/components/CustomerInvoicesList.tsx's
+    # customer-invoice peek). The project's own description is whatever
+    # actually distinguishes that specific job.
+    @property
+    def project_description(self) -> Optional[str]:
+        return self.project.description if self.project else None

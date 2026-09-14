@@ -13,9 +13,11 @@ from app.project_files import file_router
 from app.project_files.retention import purge_stale_originals
 from app.auth import auth_router
 from app.invoices import invoice_router
+from app.quotations import quotation_router
 from app.customers import customer_router
 from app.list_options import list_option_router
 from app.dashboard import dashboard_router
+from app.shared_documents import shared_document_router
 from app.middleware import RequestSizeLimitMiddleware
 from app.entities import User, UserRole
 import app.entities
@@ -132,9 +134,11 @@ app.include_router(project_router)
 app.include_router(file_router)
 app.include_router(auth_router)
 app.include_router(invoice_router)
+app.include_router(quotation_router)
 app.include_router(customer_router)
 app.include_router(list_option_router)
 app.include_router(dashboard_router)
+app.include_router(shared_document_router)
 
 
 @app.get("/")

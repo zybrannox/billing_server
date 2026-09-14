@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from app.entities import Customer, Project, Invoice
 from app.projects.repository import get_all_projects
 from app.invoices.repository import get_all_invoices
+from app.quotations.repository import get_all_quotations
 from app.customers.model import CustomerStats, CustomerProfile
 
 
@@ -153,7 +154,12 @@ class CustomerService:
     # deliberately generous rather than paginated: a single customer's own
     # order/invoice history is small enough to show in full on their own
     # profile page, unlike the admin-wide Projects/Billing lists this data
-    # is drawn from.
+    # is drawn from. Note that's about display only - the stats below are
+    # computed via their own unbounded aggregate queries, not by reducing
+    # these capped lists, so a customer who ever does cross 500 projects/
+    # invoices in real usage gets a display list that's (reasonably) capped
+    # rather than paginated, without the summary numbers above it silently
+    # under-reporting to match.
     @staticmethod
     def get_customer_profile(db: Session, customer_id: int) -> CustomerProfile | None:
         customer = db.get(Customer, customer_id)
@@ -162,16 +168,40 @@ class CustomerService:
 
         projects, _ = get_all_projects(db, page=1, page_size=500, customer_id=customer_id)
         invoices, _ = get_all_invoices(db, page=1, page_size=500, customer_id=customer_id)
+        quotations, _ = get_all_quotations(db, page=1, page_size=500, customer_id=customer_id)
 
-        active_orders = sum(1 for p in projects if p.delivered_at is None)
-        total_spent = round(sum(inv.amount for inv in invoices if inv.status == "paid"), 2)
-        outstanding_balance = round(sum(inv.balance_due for inv in invoices if inv.status == "pending"), 2)
-        pending_invoices = sum(1 for inv in invoices if inv.status == "pending")
+        total_orders = (
+            db.query(func.count(Project.id)).filter(Project.customer_id == customer_id).scalar() or 0
+        )
+        active_orders = (
+            db.query(func.count(Project.id))
+            .filter(Project.customer_id == customer_id, Project.delivered_at.is_(None))
+            .scalar()
+            or 0
+        )
+        total_spent = round(
+            db.query(func.coalesce(func.sum(Invoice.amount), 0.0))
+            .join(Project, Invoice.project_id == Project.id)
+            .filter(Project.customer_id == customer_id, Invoice.status == "paid")
+            .scalar()
+            or 0.0,
+            2,
+        )
+        pending_amounts = (
+            db.query(Invoice.amount, Invoice.advance_amount)
+            .join(Project, Invoice.project_id == Project.id)
+            .filter(Project.customer_id == customer_id, Invoice.status == "pending")
+            .all()
+        )
+        outstanding_balance = round(
+            sum(max(0.0, amount - (advance or 0.0)) for amount, advance in pending_amounts), 2
+        )
+        pending_invoices = len(pending_amounts)
 
         return CustomerProfile(
             customer=customer,
             stats=CustomerStats(
-                total_orders=len(projects),
+                total_orders=total_orders,
                 active_orders=active_orders,
                 total_spent=total_spent,
                 outstanding_balance=outstanding_balance,
@@ -179,6 +209,7 @@ class CustomerService:
             ),
             projects=projects,
             invoices=invoices,
+            quotations=quotations,
         )
 
     @staticmethod

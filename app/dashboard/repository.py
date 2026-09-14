@@ -44,9 +44,16 @@ def get_stats(db: Session) -> dict:
 
     now = datetime.utcnow()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # paid_at (when the money actually came in), not created_at (when the
+    # invoice was raised) - an invoice created last month but only marked
+    # paid today has to count as this month's revenue, not silently stay
+    # parked in last month's bucket forever. Falls back to created_at for
+    # invoices paid before this column existed (paid_at is nullable - see
+    # entities/invoice.py).
+    paid_date = func.coalesce(Invoice.paid_at, Invoice.created_at)
     revenue_this_month = (
         db.query(func.coalesce(func.sum(Invoice.amount), 0.0))
-        .filter(Invoice.status == "paid", Invoice.created_at >= month_start)
+        .filter(Invoice.status == "paid", paid_date >= month_start)
         .scalar()
         or 0.0
     )
@@ -150,10 +157,13 @@ def get_revenue_trend(db: Session, granularity: str = "month") -> list[dict]:
             y, m = divmod(total, 12)
             bucket_keys.append(datetime(y, m + 1, 1))
 
-    bucket = func.date_trunc(granularity, Invoice.created_at)
+    # paid_at, not created_at - see get_stats' revenue_this_month for why
+    # (same reasoning, same coalesce-to-created_at fallback).
+    paid_date = func.coalesce(Invoice.paid_at, Invoice.created_at)
+    bucket = func.date_trunc(granularity, paid_date)
     rows = (
         db.query(bucket.label("period"), func.coalesce(func.sum(Invoice.amount), 0.0))
-        .filter(Invoice.status == "paid", Invoice.created_at >= start)
+        .filter(Invoice.status == "paid", paid_date >= start)
         .group_by(bucket)
         .order_by(bucket)
         .all()

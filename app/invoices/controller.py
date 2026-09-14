@@ -35,8 +35,8 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 # existing invoice's status - stays admin-only.
 
 @router.post("/", response_model=InvoiceRead)
-def create(payload: InvoiceCreate, db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
-    return service_create(db, payload)
+def create(payload: InvoiceCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    return service_create(db, payload, current_user["username"])
 
 @router.get("/", response_model=InvoiceListResponse)
 def list_invoices(

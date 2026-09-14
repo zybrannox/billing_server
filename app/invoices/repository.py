@@ -1,4 +1,5 @@
 from datetime import datetime
+from sqlalchemy import case
 from sqlalchemy.orm import Session, joinedload
 from app.entities.invoice import Invoice
 from app.entities.invoice_item import InvoiceItem
@@ -6,6 +7,18 @@ from app.entities.project import Project
 from app.entities.customer import Customer
 from .calculations import compute_line
 from .model import InvoiceCreate, InvoiceUpdate
+
+# Pending invoices - the ones that actually need someone's attention - sort
+# first regardless of when they were raised; paid/cancelled (nothing left
+# to do) fall in behind. Mirrors app/projects/repository.py's
+# _PRINT_STATUS_RANK/_PRIORITY_RANK pattern for the same reason: what needs
+# action belongs at the top of the list, not buried by recency alone.
+_INVOICE_STATUS_RANK = case(
+    (Invoice.status == "pending", 1),
+    (Invoice.status == "paid", 2),
+    (Invoice.status == "cancelled", 3),
+    else_=4,
+)
 
 
 def get_project_with_customer(db: Session, project_id: int):
@@ -23,10 +36,48 @@ def get_project_with_customer(db: Session, project_id: int):
     return project, customer
 
 
-def create_invoice(db: Session, payload: InvoiceCreate):
+def create_invoice(db: Session, payload: InvoiceCreate, username: str):
     try:
+        # `new_project` (see InvoiceNewProject) means this invoice is being
+        # raised for a job that has no Project row yet - create it here, in
+        # the same transaction as the invoice below, so a failure partway
+        # through can never leave an orphaned project with no invoice (or
+        # an invoice with a project_id that doesn't exist). Not committed
+        # until the whole function's final db.commit().
+        project_id = payload.project_id
+        if payload.new_project:
+            now = datetime.utcnow()
+            new_project = Project(
+                project_type=payload.new_project.project_type,
+                customer_id=payload.new_project.customer_id,
+                # Not asked for on the invoice screen (see InvoiceNewProject)
+                # - this project exists purely to hang the invoice off of,
+                # not to be scheduled or assigned like ordinary tracked
+                # work, so it's attributed to whoever raised the invoice
+                # and dated/marked as already settled rather than left to
+                # placeholder values that would read as real scheduling
+                # decisions nobody actually made.
+                assigned_to=username,
+                priority="Normal",
+                client_status="Confirmed",
+                print_status="In Progress",
+                start_date=now,
+                delivery_date=now,
+            )
+            db.add(new_project)
+            db.flush()  # assigns new_project.id
+            # This job's dimensions/rates are already decided (they're
+            # right here in the invoice being raised), not a pending design
+            # task - so it goes straight to "designed", same as the ordinary
+            # Mark Design Completed -> Generate Invoice flow, just skipping
+            # to the point that flow ends at instead of needing a second
+            # request to get there.
+            new_project.design_completed_at = now
+            new_project.design_completed_by = username
+            project_id = new_project.id
+
         new_invoice = Invoice(
-            project_id=payload.project_id,
+            project_id=project_id,
             due_date=payload.due_date,
             status="pending",
             subtotal=0,  # set below once items are totaled
@@ -43,7 +94,7 @@ def create_invoice(db: Session, payload: InvoiceCreate):
         for idx, item in enumerate(payload.items):
             # Rounded to cents/paise - avoids floating-point noise (e.g.
             # 3.33 * 3.33) showing up in a financial document.
-            sq_ft, line_total = compute_line(item.width, item.height, item.rate)
+            sq_ft, line_total = compute_line(item.width, item.height, item.rate, item.pieces, item.unit)
             subtotal += line_total
             db.add(
                 InvoiceItem(
@@ -51,8 +102,10 @@ def create_invoice(db: Session, payload: InvoiceCreate):
                     description=item.description,
                     width=item.width,
                     height=item.height,
+                    unit=item.unit,
                     sq_ft=sq_ft,
                     rate=item.rate,
+                    pieces=item.pieces,
                     total=line_total,
                     is_manual_total=item.is_manual_total,
                     sort_order=idx,
@@ -150,7 +203,7 @@ def get_all_invoices(
     if customer_id:
         query = query.filter(Project.customer_id == customer_id)
 
-    query = query.order_by(Invoice.created_at.desc())
+    query = query.order_by(_INVOICE_STATUS_RANK, Invoice.created_at.desc())
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return items, total
