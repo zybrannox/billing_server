@@ -123,6 +123,18 @@ class InvoiceUpdate(BaseModel):
     # "paid" (see app/invoices/service.py) - not meant to be set directly
     # by a caller, same as `amount` above.
     paid_at: Optional[datetime] = None
+    # Full line-item replacement - admin-only (this whole model only reaches
+    # the DB through the admin-only PATCH /invoices/{id} - see
+    # controller.py) and only while still pending (service_update), same
+    # rule as discount_amount above. None means "leave the items alone",
+    # same exclude_unset convention every other field here already follows;
+    # an empty list is rejected in service_update, not here, so that comes
+    # back as the same kind of HTTPException as every other validation
+    # failure in this file instead of a raw 422.
+    items: Optional[List[InvoiceItemCreate]] = None
+    # Recomputed server-side from `items` in service_update, same reasoning
+    # as `amount` above - never something a caller sets directly.
+    subtotal: Optional[float] = None
 
 
 # Body for PATCH /invoices/{id}/mark-paid - deliberately just these two

@@ -185,6 +185,42 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate):
             # this generic admin update can also land status on "paid".
             payload = payload.model_copy(update={"paid_at": datetime.utcnow()})
 
+    # Full line-item edit (admin-only, see controller.py) - only while
+    # pending, same terminal-state rule as discount_amount below. Recomputes
+    # subtotal from scratch (repository.create_invoice's exact math) and,
+    # together with whatever discount ends up in effect, `amount` too, in
+    # one place - the discount_amount block right after this one guards
+    # itself with `payload.items is None` so the two can never separately
+    # (and inconsistently) patch `amount` for the same request.
+    if payload.items is not None:
+        if invoice.status != "pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"This invoice is already {invoice.status} - its items can't be changed.",
+            )
+        if not payload.items:
+            raise HTTPException(status_code=400, detail="An invoice needs at least one line item")
+
+        new_subtotal = compute_invoice_total(payload.items)
+        effective_discount = (
+            payload.discount_amount if payload.discount_amount is not None else invoice.discount_amount
+        )
+        if effective_discount > new_subtotal:
+            raise HTTPException(
+                status_code=400,
+                detail="Discount can't exceed the invoice subtotal",
+            )
+        new_amount = round(new_subtotal - effective_discount, 2)
+        effective_advance = (
+            payload.advance_amount if payload.advance_amount is not None else invoice.advance_amount
+        )
+        if effective_advance > new_amount:
+            raise HTTPException(
+                status_code=400,
+                detail="Advance amount can't exceed the invoice total",
+            )
+        payload = payload.model_copy(update={"subtotal": round(new_subtotal, 2), "amount": new_amount})
+
     # Discount can only move while the invoice is still pending - once
     # it's paid or cancelled, changing it would silently disagree with
     # money that's already been reconciled. `amount` (subtotal minus
@@ -192,7 +228,16 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate):
     # its own; it has to be recomputed together with discount_amount right
     # here; update_invoice's generic setattr loop would otherwise apply
     # the new discount_amount but leave the old, now-wrong amount in place.
-    if payload.discount_amount is not None and payload.discount_amount != invoice.discount_amount:
+    # Skipped entirely when items were also edited above - that block
+    # already recomputed `amount` from the (possibly also new)
+    # discount_amount against the new subtotal, so redoing it here against
+    # the stale pre-edit subtotal would silently overwrite the right answer
+    # with a wrong one.
+    if (
+        payload.items is None
+        and payload.discount_amount is not None
+        and payload.discount_amount != invoice.discount_amount
+    ):
         if invoice.status != "pending":
             raise HTTPException(
                 status_code=400,
@@ -216,10 +261,14 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate):
     # than the total just silently clamps to a 0 balance instead of
     # surfacing the mistake, and editing it once an invoice is already
     # paid/cancelled would disagree with money that's already been
-    # reconciled, same as discount_amount above. Checked against the
-    # possibly-just-recomputed amount (if discount also changed in this
-    # same request), not the stale pre-discount one.
-    if payload.advance_amount is not None and payload.advance_amount != invoice.advance_amount:
+    # reconciled, same as discount_amount above. Skipped when items were
+    # also edited - that block already validated advance_amount against
+    # the new amount itself.
+    if (
+        payload.items is None
+        and payload.advance_amount is not None
+        and payload.advance_amount != invoice.advance_amount
+    ):
         if invoice.status != "pending":
             raise HTTPException(
                 status_code=400,

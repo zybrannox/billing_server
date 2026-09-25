@@ -213,8 +213,42 @@ def update_invoice(db: Session, invoice_id: int, invoice: InvoiceUpdate):
     if not db_invoice:
         return None
 
-    for key, value in invoice.model_dump(exclude_unset=True).items():
+    data = invoice.model_dump(exclude_unset=True)
+    # `items` is a relationship, not a plain column - the generic setattr
+    # loop below would otherwise hand it a list of plain dicts (from
+    # model_dump) instead of InvoiceItem rows and break the ORM mapping.
+    # Popped out and handled separately below; service_update has already
+    # recomputed subtotal/amount to match by the time this runs.
+    items_payload = data.pop("items", None)
+
+    for key, value in data.items():
         setattr(db_invoice, key, value)
+
+    if items_payload is not None:
+        # Invoice.items has cascade="all, delete-orphan" (see
+        # entities/invoice.py) - reassigning the collection deletes the old
+        # rows and inserts these in their place, same per-line math as
+        # repository.create_invoice's own item loop.
+        new_items = []
+        for idx, item in enumerate(items_payload):
+            sq_ft, total = compute_line(
+                item["width"], item["height"], item["rate"], item["pieces"], item["unit"]
+            )
+            new_items.append(
+                InvoiceItem(
+                    description=item.get("description"),
+                    width=item["width"],
+                    height=item["height"],
+                    unit=item["unit"],
+                    sq_ft=sq_ft,
+                    rate=item["rate"],
+                    pieces=item["pieces"],
+                    total=total,
+                    is_manual_total=item.get("is_manual_total", False),
+                    sort_order=idx,
+                )
+            )
+        db_invoice.items = new_items
 
     db.commit()
     db.refresh(db_invoice)
