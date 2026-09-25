@@ -147,10 +147,19 @@ def mark_print_completed(db: Session, project_id: int, username: str):
     if not db_project:
         return None
 
+    changed = False
     if db_project.print_completed_at is None:
         db_project.print_completed_at = datetime.utcnow()
         db_project.print_completed_by = username
+        changed = True
+
+    # Keep the status consistent even for legacy rows that already have an
+    # audit timestamp but were never moved out of the in-progress state.
+    if db_project.print_status != "Completed":
         db_project.print_status = "Completed"
+        changed = True
+
+    if changed:
         db.commit()
         db.refresh(db_project)
 
