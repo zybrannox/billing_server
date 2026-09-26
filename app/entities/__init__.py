@@ -8,3 +8,7 @@ from .list_option import ListOption
 from .quotation import Quotation
 from .quotation_item import QuotationItem
 from .shared_document import SharedDocument
+from .company import Company
+from .client_account import ClientAccount
+from .job_request import JobRequest
+from .job_request_file import JobRequestFile

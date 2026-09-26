@@ -26,6 +26,7 @@ class CustomerService:
             last_name=customer.last_name,
             contact_number=customer.contact_number,
             email=customer.email,
+            company_id=customer.company_id,
         )
 
         try:
@@ -236,5 +237,17 @@ class CustomerService:
         if not customer:
             return False
         db.delete(customer)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Project.customer_id and Quotation.customer_id are FKs with no
+            # ondelete clause (unlike Customer.company_id, which explicitly
+            # SET NULLs - see entities/customer.py) - deleting a customer
+            # who still has any project/invoice/quotation on file violates
+            # that FK and would otherwise surface as a raw, unhandled 500.
+            db.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail="This customer still has projects or invoices on file and can't be deleted.",
+            )
         return True

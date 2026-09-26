@@ -75,8 +75,11 @@ def service_list(
     page_size: int = 20,
     search: str | None = None,
     customer_id: int | None = None,
+    company_id: int | None = None,
 ) -> InvoiceListResponse:
-    items, total = get_all_invoices(db, page=page, page_size=page_size, search=search, customer_id=customer_id)
+    items, total = get_all_invoices(
+        db, page=page, page_size=page_size, search=search, customer_id=customer_id, company_id=company_id
+    )
     total_pages = math.ceil(total / page_size) if page_size else 0
     return InvoiceListResponse(
         items=items,

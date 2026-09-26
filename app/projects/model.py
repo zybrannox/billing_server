@@ -74,6 +74,8 @@ class ProjectRead(ProjectBase):
     delivered_at: OptionalUTCDateTime = None
     delivered_by: Optional[str] = None
     delivered_on_credit: bool = False
+    notified_at: OptionalUTCDateTime = None
+    notified_by: Optional[str] = None
     customer_name: Optional[str] = None
     pinned: bool = False
 

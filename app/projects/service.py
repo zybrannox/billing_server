@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from app.entities.project import Project
 from app.invoices.repository import get_latest_invoice_for_project
@@ -12,6 +13,7 @@ from .repository import (
     mark_design_completed,
     mark_print_completed,
     mark_delivered,
+    mark_notified,
     toggle_pin,
 )
 import math
@@ -40,6 +42,7 @@ def service_list(
     customer_id: int | None = None,
     project_id: int | None = None,
     assigned_to: str | None = None,
+    company_id: int | None = None,
 ) -> ProjectListResponse:
     items, total = get_all_projects(
         db,
@@ -51,6 +54,7 @@ def service_list(
         customer_id=customer_id,
         project_id=project_id,
         assigned_to=assigned_to,
+        company_id=company_id,
     )
     total_pages = math.ceil(total / page_size) if page_size else 0
     return ProjectListResponse(
@@ -168,12 +172,11 @@ def service_mark_delivered(
     return mark_delivered(db, project_id, username, on_credit=on_credit)
 
 
-# def service_delete(db: Session, project_id: int):
-#     deleted = delete_project(db, project_id)
-#     if not deleted:
-#         raise HTTPException(status_code=404, detail="Project not found")
-#     return {"message": "Project deleted"}
-
+def service_mark_notified(db: Session, project_id: int, username: str):
+    project = get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return mark_notified(db, project_id, username)
 
 
 def service_toggle_pin(db: Session, project_id: int):
@@ -188,14 +191,26 @@ def service_delete(db: Session, project_id: int):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Delete files from disk first - the project_files DB rows themselves
-    # are handled by the ORM cascade (see Project.files) when the project
-    # is deleted below, but that only removes rows, not the bytes on disk.
-    delete_project_files([f.path for f in project.files])
+    file_paths = [f.path for f in project.files]
 
-    # Delete DB record
+    # Delete DB record first, files from disk only after that actually
+    # commits - Invoice.project_id is an FK with no ondelete clause, so
+    # deleting a project that's already been invoiced violates it. Deleting
+    # the on-disk files before this could commit meant a rejected delete
+    # (rolled back, project row still there) had already lost its files for
+    # nothing; doing it in this order means a failed delete leaves both the
+    # DB row and the files untouched.
     db.delete(project)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="This project has already been invoiced and can't be deleted.",
+        )
+
+    delete_project_files(file_paths)
 
     return {"message": "Project and files deleted successfully"}
 
@@ -208,12 +223,21 @@ def service_delete_bulk(db: Session, project_ids: list[int]):
         .filter(Project.id.in_(project_ids))
         .all()
     )
+    file_paths = [f.path for project in projects for f in project.files]
 
-    for project in projects:
-        # Delete files from disk
-        delete_project_files([f.path for f in project.files])
+    # DB delete first, same reasoning as service_delete above - if any
+    # selected project has already been invoiced, this raises instead of
+    # committing, and files for the *whole* batch would otherwise already
+    # be gone from disk by the time that failure surfaced.
+    try:
+        deleted_projects = delete_projects(db, project_ids)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="One or more selected projects have already been invoiced and can't be deleted.",
+        )
 
-    # Delete DB records using the repository function
-    deleted_projects = delete_projects(db, project_ids)
+    delete_project_files(file_paths)
 
     return {"message": f"{len(deleted_projects)} projects and their files deleted successfully"}

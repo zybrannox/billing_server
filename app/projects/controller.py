@@ -13,6 +13,7 @@ from .service import (
     service_mark_design_completed,
     service_mark_print_completed,
     service_mark_delivered,
+    service_mark_notified,
     service_toggle_pin,
 )
 
@@ -34,6 +35,7 @@ def list_projects(
     customer_id: int | None = None,
     project_id: int | None = None,
     assigned_to: str | None = None,
+    company_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
@@ -47,6 +49,7 @@ def list_projects(
         customer_id=customer_id,
         project_id=project_id,
         assigned_to=assigned_to,
+        company_id=company_id,
     )
 
 
@@ -117,6 +120,20 @@ def mark_delivered(
         on_credit=on_credit,
         is_admin=current_user.get("role") == "admin",
     )
+
+
+# Staff-triggered "Notify Client (WhatsApp)" action - the actual wa.me
+# message is built and opened client-side (see notifyClientWhatsApp.ts,
+# mirroring the existing shareToWhatsApp.ts pattern); this endpoint just
+# records that it happened. Any authenticated staff can call it, matching
+# the other milestone endpoints above.
+@router.patch("/{project_id}/notify", response_model=ProjectRead)
+def notify_client(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    return service_mark_notified(db, project_id, current_user["username"])
 
 
 @router.patch("/{project_id}/pin", response_model=ProjectRead)

@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import case
 from sqlalchemy.orm import Session, joinedload
 from app.entities.invoice import Invoice
 from app.entities.invoice_item import InvoiceItem
 from app.entities.project import Project
 from app.entities.customer import Customer
+from app.entities.company import Company
 from .calculations import compute_line
 from .model import InvoiceCreate, InvoiceUpdate
 
@@ -76,9 +77,23 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
             new_project.design_completed_by = username
             project_id = new_project.id
 
+        # Auto-default the due date from the customer's company payment
+        # terms (see app/companies) when the caller didn't set one
+        # explicitly - a company contact's invoices fall due N days after
+        # raising, not on receipt. Every invoice for a customer with no
+        # company (the overwhelming majority) is unaffected: due_date
+        # stays None exactly as before.
+        due_date = payload.due_date
+        if due_date is None:
+            _, customer = get_project_with_customer(db, project_id)
+            if customer and customer.company_id:
+                company = db.get(Company, customer.company_id)
+                if company and company.payment_terms_days > 0:
+                    due_date = datetime.utcnow() + timedelta(days=company.payment_terms_days)
+
         new_invoice = Invoice(
             project_id=project_id,
-            due_date=payload.due_date,
+            due_date=due_date,
             status="pending",
             subtotal=0,  # set below once items are totaled
             discount_amount=payload.discount_amount,
@@ -163,6 +178,7 @@ def get_all_invoices(
     page_size: int = 20,
     search: str | None = None,
     customer_id: int | None = None,
+    company_id: int | None = None,
 ):
     # Previously returned every invoice ever created, unpaginated - fine
     # with a handful of rows, but the response only grows over time (unlike
@@ -182,7 +198,7 @@ def get_all_invoices(
     # Both branches below need the same Project/Customer join, so it's
     # done once here rather than risking two joins (or a missing one) if
     # search and customer_id are ever both passed at once.
-    if search or customer_id:
+    if search or customer_id or company_id:
         query = query.outerjoin(Project, Invoice.project_id == Project.id).outerjoin(
             Customer, Project.customer_id == Customer.id
         )
@@ -202,6 +218,13 @@ def get_all_invoices(
 
     if customer_id:
         query = query.filter(Project.customer_id == customer_id)
+
+    # Every invoice belonging to any contact of this company - not a
+    # separate "statement" endpoint, just this same list filtered wider
+    # (see app/companies' CompanyProfile, which has no embedded invoices
+    # list for exactly this reason).
+    if company_id:
+        query = query.filter(Customer.company_id == company_id)
 
     query = query.order_by(_INVOICE_STATUS_RANK, Invoice.created_at.desc())
     total = query.count()

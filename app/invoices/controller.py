@@ -44,10 +44,13 @@ def list_invoices(
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = Query(None),
     customer_id: int | None = Query(None),
+    company_id: int | None = Query(None),
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    return service_list(db, page=page, page_size=page_size, search=search, customer_id=customer_id)
+    return service_list(
+        db, page=page, page_size=page_size, search=search, customer_id=customer_id, company_id=company_id
+    )
 
 # Two path segments after /invoices/ (preview/{project_id}) so this never
 # collides with GET /invoices/{invoice_id} below, which only matches one.

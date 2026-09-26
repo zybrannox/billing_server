@@ -69,3 +69,10 @@ class Project(Base):
     # the invoice can later be marked paid (settling the credit) while this
     # stays true as the historical record of how the delivery happened.
     delivered_on_credit = Column(Boolean, nullable=False, default=False)
+    # Staff-triggered "Notify Client (WhatsApp)" action (see
+    # app/projects/controller.py's /notify route) - a "last notified" fact,
+    # not a one-time milestone like the columns above, since staff may
+    # re-notify. Set purely client-side (opening a wa.me tab); there's no
+    # way to know whether the message was actually sent from here.
+    notified_at = Column(DateTime, nullable=True)
+    notified_by = Column(String, nullable=True)

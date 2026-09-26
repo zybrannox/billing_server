@@ -10,6 +10,10 @@ class CustomerBase(BaseModel):
     last_name: str
     contact_number: str
     email: Optional[EmailStr] = None
+    # A contact belonging to a B2B Company (see app/companies) - None
+    # means an ordinary standalone individual customer, unaffected by any
+    # company's billing terms.
+    company_id: Optional[int] = None
 
 
 class CustomerCreate(CustomerBase):
@@ -21,6 +25,7 @@ class CustomerUpdate(BaseModel):
     last_name: Optional[str] = None
     contact_number: Optional[str] = None
     email: Optional[EmailStr] = None
+    company_id: Optional[int] = None
 
 
 class CustomerRead(CustomerBase):

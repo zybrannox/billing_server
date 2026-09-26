@@ -51,10 +51,23 @@ def get_all_projects(
     customer_id: int | None = None,
     project_id: int | None = None,
     assigned_to: str | None = None,
+    company_id: int | None = None,
 ):
     query = db.query(Project).options(
         joinedload(Project.customer), selectinload(Project.files)
     )
+
+    # Both branches below need the same Project -> Customer join, so it's
+    # done once here rather than joining twice if search and company_id are
+    # ever both passed at once - mirrors get_all_invoices' identical guard
+    # (app/invoices/repository.py).
+    if search or company_id:
+        query = query.outerjoin(Customer, Project.customer_id == Customer.id)
+
+    # Every project belonging to any contact of this company - powers the
+    # client portal's company-wide "my orders" view (see app/portal).
+    if company_id:
+        query = query.filter(Customer.company_id == company_id)
 
     # Jumping straight to one known project (e.g. from a dashboard/
     # notification row) - an exact id match, so it deliberately bypasses
@@ -71,7 +84,7 @@ def get_all_projects(
 
     if search:
         like = f"%{search}%"
-        query = query.outerjoin(Customer, Project.customer_id == Customer.id).filter(
+        query = query.filter(
             or_(
                 Project.project_type.ilike(like),
                 Project.assigned_to.ilike(like),
@@ -183,6 +196,22 @@ def mark_delivered(db: Session, project_id: int, username: str, on_credit: bool 
         db.commit()
         db.refresh(db_project)
 
+    return db_project
+
+
+def mark_notified(db: Session, project_id: int, username: str):
+    """Not idempotent-gated like mark_design_completed/mark_delivered above -
+    staff may re-notify a client (e.g. after a mistake), so this always
+    overwrites with the latest notify, a "last notified" fact rather than a
+    one-time milestone."""
+    db_project = get_project(db, project_id)
+    if not db_project:
+        return None
+
+    db_project.notified_at = datetime.utcnow()
+    db_project.notified_by = username
+    db.commit()
+    db.refresh(db_project)
     return db_project
 
 
