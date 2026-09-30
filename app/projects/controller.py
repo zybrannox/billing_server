@@ -36,6 +36,12 @@ def list_projects(
     project_id: int | None = None,
     assigned_to: str | None = None,
     company_id: int | None = None,
+    # "ongoing" hides projects that are both fully delivered and older than
+    # the retention window (see get_all_projects) - left unset, every
+    # existing caller (customer/employee profiles, the client portal, the
+    # invoice picker, /projects/billing) is unaffected. Only the admin
+    # "Ongoing Activities" page passes this.
+    view: str | None = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
@@ -50,6 +56,7 @@ def list_projects(
         project_id=project_id,
         assigned_to=assigned_to,
         company_id=company_id,
+        view=view,
     )
 
 

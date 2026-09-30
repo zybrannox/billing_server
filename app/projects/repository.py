@@ -1,9 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import case, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.entities.project import Project
 from app.entities.customer import Customer
 from .model import ProjectCreate, ProjectUpdate
+
+# How long a fully-delivered project stays on the admin "Ongoing Activities"
+# board before rolling off to the (unfiltered) Project History page - see
+# get_all_projects' `view="ongoing"` branch below.
+ONGOING_VIEW_RETENTION_DAYS = 7
 
 
 def create_project(db: Session, project: ProjectCreate):
@@ -52,10 +57,32 @@ def get_all_projects(
     project_id: int | None = None,
     assigned_to: str | None = None,
     company_id: int | None = None,
+    # Opt-in only - every other caller (customer/employee profile pulls, the
+    # client portal's "my orders", the invoice-creation project picker,
+    # /projects/billing) leaves this unset and keeps seeing everything,
+    # exactly as before. Only the admin "Ongoing Activities" page passes
+    # "ongoing" (see app/projects/controller.py).
+    view: str | None = None,
 ):
     query = db.query(Project).options(
         joinedload(Project.customer), selectinload(Project.files)
     )
+
+    if view == "ongoing":
+        # Roll a project off the ongoing board once it's both fully
+        # delivered (delivered_at set - matches the same "still active"
+        # check already used in app/customers/service.py and
+        # app/users/service.py) AND old enough (created more than
+        # ONGOING_VIEW_RETENTION_DAYS ago). Anything still in progress stays
+        # visible indefinitely, no matter its age - only finished work moves
+        # to Project History.
+        stale_cutoff = datetime.utcnow() - timedelta(days=ONGOING_VIEW_RETENTION_DAYS)
+        query = query.filter(
+            or_(
+                Project.delivered_at.is_(None),
+                Project.created_at > stale_cutoff,
+            )
+        )
 
     # Both branches below need the same Project -> Customer join, so it's
     # done once here rather than joining twice if search and company_id are

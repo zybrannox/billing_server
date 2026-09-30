@@ -43,6 +43,7 @@ def service_list(
     project_id: int | None = None,
     assigned_to: str | None = None,
     company_id: int | None = None,
+    view: str | None = None,
 ) -> ProjectListResponse:
     items, total = get_all_projects(
         db,
@@ -55,6 +56,7 @@ def service_list(
         project_id=project_id,
         assigned_to=assigned_to,
         company_id=company_id,
+        view=view,
     )
     total_pages = math.ceil(total / page_size) if page_size else 0
     return ProjectListResponse(

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -7,6 +7,12 @@ class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Backs the "Ongoing Activities" 7-day rolloff (see
+    # app/projects/repository.py's get_all_projects `view="ongoing"`) -
+    # server_default so every insert path (including the ones that predate
+    # this column) gets a real timestamp without every caller needing to
+    # set it explicitly.
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
     project_type = Column(String)
     assigned_to = Column(String)
     priority = Column(String)
