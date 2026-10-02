@@ -11,6 +11,8 @@ from .model import (
     InvoicePreviewRead,
     ProjectPaymentStatus,
     MarkInvoicePaidRequest,
+    RecordPaymentRequest,
+    InvoicePaymentRead,
 )
 from .service import (
     service_create,
@@ -22,6 +24,8 @@ from .service import (
     service_get_latest_invoice_for_project,
     service_update,
     service_mark_paid,
+    service_record_payment,
+    service_get_payments,
     service_delete
 )
 
@@ -81,13 +85,17 @@ def get_latest_invoice_for_project(project_id: int, db: Session = Depends(get_db
 def get_invoice_details(invoice_id: int, db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
     return service_get_details(db, invoice_id)
 
+@router.get("/{invoice_id}/payments", response_model=list[InvoicePaymentRead])
+def get_invoice_payments(invoice_id: int, db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
+    return service_get_payments(db, invoice_id)
+
 @router.get("/{invoice_id}", response_model=InvoiceRead)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
     return service_get(db, invoice_id)
 
 @router.patch("/{invoice_id}", response_model=InvoiceRead)
 def update_invoice(invoice_id: int, payload: InvoiceUpdate, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
-    return service_update(db, invoice_id, payload)
+    return service_update(db, invoice_id, payload, _admin["username"])
 
 # Open to any authenticated user, unlike the generic update above - same
 # reasoning as create/preview/deliver: marking your own delivered work as
@@ -102,7 +110,25 @@ def mark_invoice_paid(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    return service_mark_paid(db, invoice_id, payload.payment_method, payload.payment_reference)
+    return service_mark_paid(
+        db, invoice_id, payload.payment_method, payload.payment_reference, _user["username"]
+    )
+
+@router.patch("/{invoice_id}/record-payment", response_model=InvoiceRead)
+def record_invoice_payment(
+    invoice_id: int,
+    payload: RecordPaymentRequest,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    return service_record_payment(
+        db,
+        invoice_id,
+        payload.amount,
+        payload.payment_method,
+        payload.payment_reference,
+        _user["username"],
+    )
 
 @router.delete("/{invoice_id}")
 def delete_invoice(invoice_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):

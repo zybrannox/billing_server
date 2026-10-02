@@ -3,6 +3,7 @@ from sqlalchemy import case
 from sqlalchemy.orm import Session, joinedload
 from app.entities.invoice import Invoice
 from app.entities.invoice_item import InvoiceItem
+from app.entities.invoice_payment import InvoicePayment
 from app.entities.project import Project
 from app.entities.customer import Customer
 from app.entities.company import Company
@@ -104,6 +105,17 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
         )
         db.add(new_invoice)
         db.flush()  # assigns new_invoice.id without committing yet
+
+        if payload.advance_amount and payload.advance_amount > 0:
+            db.add(
+                InvoicePayment(
+                    invoice_id=new_invoice.id,
+                    amount=payload.advance_amount,
+                    payment_method=payload.payment_method,
+                    payment_reference=payload.payment_reference,
+                    recorded_by=username,
+                )
+            )
 
         subtotal = 0.0
         for idx, item in enumerate(payload.items):
@@ -231,10 +243,21 @@ def get_all_invoices(
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return items, total
 
-def update_invoice(db: Session, invoice_id: int, invoice: InvoiceUpdate):
+def get_invoice_payments(db: Session, invoice_id: int):
+    return (
+        db.query(InvoicePayment)
+        .filter(InvoicePayment.invoice_id == invoice_id)
+        .order_by(InvoicePayment.paid_at, InvoicePayment.id)
+        .all()
+    )
+
+
+def update_invoice(db: Session, invoice_id: int, invoice: InvoiceUpdate, username: str | None = None):
     db_invoice = get_invoice(db, invoice_id)
     if not db_invoice:
         return None
+
+    advance_before = db_invoice.advance_amount or 0
 
     data = invoice.model_dump(exclude_unset=True)
     # `items` is a relationship, not a plain column - the generic setattr
@@ -246,6 +269,22 @@ def update_invoice(db: Session, invoice_id: int, invoice: InvoiceUpdate):
 
     for key, value in data.items():
         setattr(db_invoice, key, value)
+
+    # Every change to the running advance total gets a ledger entry for the
+    # difference, whichever path caused it (record-payment, mark-paid, or an
+    # admin editing the advance directly) - keeps payment history summing to
+    # advance_amount instead of each caller having to remember to log it.
+    advance_delta = round((db_invoice.advance_amount or 0) - advance_before, 2)
+    if advance_delta != 0:
+        db.add(
+            InvoicePayment(
+                invoice_id=db_invoice.id,
+                amount=advance_delta,
+                payment_method=db_invoice.payment_method,
+                payment_reference=db_invoice.payment_reference,
+                recorded_by=username,
+            )
+        )
 
     if items_payload is not None:
         # Invoice.items has cascade="all, delete-orphan" (see

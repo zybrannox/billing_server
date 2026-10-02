@@ -12,3 +12,4 @@ from .company import Company
 from .client_account import ClientAccount
 from .job_request import JobRequest
 from .job_request_file import JobRequestFile
+from .invoice_payment import InvoicePayment

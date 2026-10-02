@@ -12,6 +12,7 @@ from .repository import (
     get_latest_invoice_for_project,
     get_project_with_customer,
     update_invoice,
+    get_invoice_payments,
     delete_invoice
 )
 from typing import Optional
@@ -161,7 +162,7 @@ def service_get_latest_invoice_for_project(db: Session, project_id: int):
 
 VALID_STATUSES = {"pending", "paid", "cancelled"}
 
-def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate):
+def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate, username: str | None = None):
     invoice = get_invoice(db, invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -284,13 +285,17 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate):
                 detail="Advance amount can't exceed the invoice total",
             )
 
-    updated = update_invoice(db, invoice_id, payload)
+    updated = update_invoice(db, invoice_id, payload, username)
     if not updated:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return updated
 
 def service_mark_paid(
-    db: Session, invoice_id: int, payment_method: str, payment_reference: Optional[str]
+    db: Session,
+    invoice_id: int,
+    payment_method: str,
+    payment_reference: Optional[str],
+    username: str | None = None,
 ):
     """Open to any authenticated user (see controller.py) - unlike the
     generic update this deliberately doesn't go through, this only ever
@@ -318,10 +323,60 @@ def service_mark_paid(
         advance_amount=invoice.amount,
         paid_at=datetime.utcnow(),
     )
-    updated = update_invoice(db, invoice_id, payload)
+    updated = update_invoice(db, invoice_id, payload, username)
     if not updated:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return updated
+
+
+def service_record_payment(
+    db: Session,
+    invoice_id: int,
+    amount: float,
+    payment_method: str,
+    payment_reference: Optional[str],
+    username: str | None = None,
+):
+    """Adds an instalment to advance_amount (the invoice's running total of
+    money received - see Invoice.balance_due). Once it reaches the invoice
+    amount the invoice flips to paid, exactly as service_mark_paid would
+    leave it. payment_method/reference describe the most recent payment
+    (the invoice only stores one of each, not a per-payment ledger)."""
+    invoice = get_invoice(db, invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    if invoice.status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"This invoice is already {invoice.status} - payments can't be recorded.",
+        )
+
+    amount = round(amount, 2)
+    if amount > invoice.balance_due:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Payment can't exceed the balance due (₹{invoice.balance_due:g}).",
+        )
+
+    new_advance = round((invoice.advance_amount or 0) + amount, 2)
+    settled = new_advance >= round(invoice.amount, 2)
+    payload = InvoiceUpdate(
+        advance_amount=invoice.amount if settled else new_advance,
+        payment_method=payment_method,
+        payment_reference=payment_reference,
+        **({"status": "paid", "paid_at": datetime.utcnow()} if settled else {}),
+    )
+    updated = update_invoice(db, invoice_id, payload, username)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return updated
+
+
+def service_get_payments(db: Session, invoice_id: int):
+    if not get_invoice(db, invoice_id):
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return get_invoice_payments(db, invoice_id)
 
 
 def service_delete(db: Session, invoice_id: int):

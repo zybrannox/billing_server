@@ -147,6 +147,28 @@ class MarkInvoicePaidRequest(BaseModel):
     payment_reference: Optional[str] = None
 
 
+# Body for PATCH /invoices/{id}/record-payment - a partial (or final)
+# instalment against a pending invoice. Same narrow-by-design reasoning as
+# MarkInvoicePaidRequest above: open to any authenticated user, so it can
+# only ever add money received, never touch amount/discount.
+class RecordPaymentRequest(BaseModel):
+    amount: float = Field(gt=0)
+    payment_method: PaymentMethod
+    payment_reference: Optional[str] = None
+
+
+class InvoicePaymentRead(BaseModel):
+    id: int
+    # Signed - a negative entry is an admin correcting the advance downward.
+    amount: float
+    payment_method: Optional[str] = None
+    payment_reference: Optional[str] = None
+    paid_at: UTCDateTime
+    recorded_by: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 class InvoiceRead(BaseModel):
     id: int
     project_id: int
