@@ -21,8 +21,13 @@ class InvoiceItemCreate(BaseModel):
     # Sq-ft billing: width/height must be positive - a zero or negative
     # dimension isn't a real line item. Rate can be 0 (e.g. a comped item)
     # but never negative.
-    width: float = Field(gt=0)
-    height: float = Field(gt=0)
+    width: float = Field(default=0, ge=0)
+    height: float = Field(default=0, ge=0)
+    # False for an "Others" line - billed by quantity, not area. Width and
+    # height are then ignored (stored as 0) and the line totals as
+    # rate x pieces. Defaults True, so every existing caller keeps the
+    # strict "dimensions must be positive" rule (enforced below).
+    has_dimensions: bool = True
     unit: MeasurementUnit = "ft"
     rate: float = Field(ge=0)
     # How many identical pieces this one line bills for (e.g. 10 identical
@@ -37,12 +42,19 @@ class InvoiceItemCreate(BaseModel):
     # only controls whether the invoice view shows it.
     is_manual_total: bool = False
 
+    @model_validator(mode="after")
+    def dimensions_required_when_measured(self):
+        if self.has_dimensions and (self.width <= 0 or self.height <= 0):
+            raise ValueError("width and height must be greater than 0")
+        return self
+
 
 class InvoiceItemRead(BaseModel):
     id: int
     description: Optional[str] = None
     width: float
     height: float
+    has_dimensions: bool = True
     unit: MeasurementUnit
     sq_ft: float
     rate: float

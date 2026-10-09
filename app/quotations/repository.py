@@ -30,7 +30,9 @@ def create_quotation(db: Session, payload: QuotationCreate):
 
         subtotal = 0.0
         for idx, item in enumerate(payload.items):
-            sq_ft, line_total = compute_line(item.width, item.height, item.rate, item.pieces, item.unit)
+            sq_ft, line_total = compute_line(
+                item.width, item.height, item.rate, item.pieces, item.unit, item.has_dimensions
+            )
             subtotal += line_total
             db.add(
                 QuotationItem(
@@ -38,6 +40,7 @@ def create_quotation(db: Session, payload: QuotationCreate):
                     description=item.description,
                     width=item.width,
                     height=item.height,
+                    has_dimensions=item.has_dimensions,
                     unit=item.unit,
                     sq_ft=sq_ft,
                     rate=item.rate,
@@ -171,6 +174,7 @@ def convert_quotation_to_invoice(
                     description=item.description,
                     width=item.width,
                     height=item.height,
+                    has_dimensions=item.has_dimensions,
                     unit=item.unit,
                     sq_ft=item.sq_ft,
                     rate=item.rate,

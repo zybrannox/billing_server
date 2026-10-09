@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Literal, Optional
 from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
 from app.projects.model import Priority
@@ -7,8 +7,10 @@ from app.invoices.model import MeasurementUnit
 
 class QuotationItemCreate(BaseModel):
     description: Optional[str] = None
-    width: float = Field(gt=0)
-    height: float = Field(gt=0)
+    width: float = Field(default=0, ge=0)
+    height: float = Field(default=0, ge=0)
+    # See app/invoices/model.py's InvoiceItemCreate.has_dimensions.
+    has_dimensions: bool = True
     unit: MeasurementUnit = "ft"
     rate: float = Field(ge=0)
     # See app/invoices/model.py's InvoiceItemCreate.pieces - identical
@@ -16,12 +18,19 @@ class QuotationItemCreate(BaseModel):
     pieces: int = Field(default=1, ge=1)
     is_manual_total: bool = False
 
+    @model_validator(mode="after")
+    def dimensions_required_when_measured(self):
+        if self.has_dimensions and (self.width <= 0 or self.height <= 0):
+            raise ValueError("width and height must be greater than 0")
+        return self
+
 
 class QuotationItemRead(BaseModel):
     id: int
     description: Optional[str] = None
     width: float
     height: float
+    has_dimensions: bool = True
     unit: MeasurementUnit
     sq_ft: float
     rate: float

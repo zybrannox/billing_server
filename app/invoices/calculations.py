@@ -9,7 +9,12 @@ SQ_IN_PER_SQ_FT = 144
 
 
 def compute_line(
-    width: float, height: float, rate: float, pieces: int = 1, unit: MeasurementUnit = "ft"
+    width: float,
+    height: float,
+    rate: float,
+    pieces: int = 1,
+    unit: MeasurementUnit = "ft",
+    has_dimensions: bool = True,
 ) -> Tuple[float, float]:
     """(sq_ft, total) for one line item, rounded to 2 decimals - the single
     source of truth for this math. Used both when actually persisting an
@@ -29,6 +34,11 @@ def compute_line(
     convert to sq_ft here rather than being billed against their raw
     (much larger) inch-squared figure.
     """
+    if not has_dimensions:
+        # An "Others" line (a service or sundry item that isn't measured by
+        # area): billed as a plain rate x pieces, with no sq_ft.
+        return 0.0, round(rate * pieces, 2)
+
     raw_area = width * height
     sq_ft = round(raw_area / SQ_IN_PER_SQ_FT, 2) if unit == "in" else round(raw_area, 2)
     total = round(sq_ft * rate * pieces, 2)
@@ -36,4 +46,4 @@ def compute_line(
 
 
 def compute_invoice_total(items: List[InvoiceItemCreate]) -> float:
-    return round(sum(compute_line(i.width, i.height, i.rate, i.pieces, i.unit)[1] for i in items), 2)
+    return round(sum(compute_line(i.width, i.height, i.rate, i.pieces, i.unit, i.has_dimensions)[1] for i in items), 2)

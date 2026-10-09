@@ -121,7 +121,9 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
         for idx, item in enumerate(payload.items):
             # Rounded to cents/paise - avoids floating-point noise (e.g.
             # 3.33 * 3.33) showing up in a financial document.
-            sq_ft, line_total = compute_line(item.width, item.height, item.rate, item.pieces, item.unit)
+            sq_ft, line_total = compute_line(
+                item.width, item.height, item.rate, item.pieces, item.unit, item.has_dimensions
+            )
             subtotal += line_total
             db.add(
                 InvoiceItem(
@@ -129,6 +131,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
                     description=item.description,
                     width=item.width,
                     height=item.height,
+                    has_dimensions=item.has_dimensions,
                     unit=item.unit,
                     sq_ft=sq_ft,
                     rate=item.rate,
@@ -293,14 +296,16 @@ def update_invoice(db: Session, invoice_id: int, invoice: InvoiceUpdate, usernam
         # repository.create_invoice's own item loop.
         new_items = []
         for idx, item in enumerate(items_payload):
+            has_dimensions = item.get("has_dimensions", True)
             sq_ft, total = compute_line(
-                item["width"], item["height"], item["rate"], item["pieces"], item["unit"]
+                item.get("width", 0), item.get("height", 0), item["rate"], item["pieces"], item["unit"], has_dimensions
             )
             new_items.append(
                 InvoiceItem(
                     description=item.get("description"),
-                    width=item["width"],
-                    height=item["height"],
+                    width=item.get("width", 0),
+                    height=item.get("height", 0),
+                    has_dimensions=has_dimensions,
                     unit=item["unit"],
                     sq_ft=sq_ft,
                     rate=item["rate"],

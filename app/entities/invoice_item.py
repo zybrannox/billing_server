@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -23,6 +23,10 @@ class InvoiceItem(Base):
         Integer, ForeignKey("invoices_v1.id", ondelete="CASCADE"), nullable=False, index=True
     )
     description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # False for an "Others" line - billed by quantity (rate x pieces), not by
+    # area. width/height/sq_ft are stored as 0 for these; readers check this
+    # flag instead of guessing from the zeros.
+    has_dimensions: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
     width: Mapped[float] = mapped_column(Float, nullable=False)
     height: Mapped[float] = mapped_column(Float, nullable=False)
     # The unit width/height were actually entered in ("ft" or "in") - not

@@ -5,4 +5,4 @@ from .model import QuotationItemCreate
 
 
 def compute_quotation_total(items: List[QuotationItemCreate]) -> float:
-    return round(sum(compute_line(i.width, i.height, i.rate, i.pieces, i.unit)[1] for i in items), 2)
+    return round(sum(compute_line(i.width, i.height, i.rate, i.pieces, i.unit, i.has_dimensions)[1] for i in items), 2)
