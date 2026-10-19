@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
+from app.rate_limiting import limiter
 from app.database import get_db
 
 from .model import ShareLinkResponse
@@ -10,6 +11,7 @@ from .service import (
     service_create_invoice_share_link,
     service_create_quotation_share_link,
     service_get_document_path,
+    service_revoke_share_link,
 )
 
 router = APIRouter(tags=["Shared Documents"])
@@ -47,12 +49,36 @@ async def create_quotation_share_link(
     return ShareLinkResponse(url=url)
 
 
+# Admin-only: turning a link off is a control over customer-facing access to a
+# financial document. The link dies immediately and the stored PDF is deleted.
+@router.delete("/invoices/{invoice_id}/share-link")
+def revoke_invoice_share_link(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    return service_revoke_share_link(db, "invoice", invoice_id)
+
+
+@router.delete("/quotations/{quotation_id}/share-link")
+def revoke_quotation_share_link(
+    quotation_id: int,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    return service_revoke_share_link(db, "quotation", quotation_id)
+
+
 # Deliberately no auth dependency at all - this is the one link a customer
 # with no Zybrannox account is meant to open directly (from WhatsApp,
 # say). Security here is the token's own unguessable length (see
 # repository.py's secrets.token_urlsafe(32)), not a login wall.
 @router.get("/public/documents/{token}")
-def get_shared_document(token: str, db: Session = Depends(get_db)):
+# Rate-limited per IP: this is the one endpoint anyone on the internet can
+# call, so token-guessing needs a hard ceiling (the tokens are 256-bit, so
+# this is defence in depth, and keeps scrapers from hammering the disk).
+@limiter.limit("60/minute")
+def get_shared_document(request: Request, token: str, db: Session = Depends(get_db)):
     path, display_name = service_get_document_path(db, token)
     return FileResponse(
         path,

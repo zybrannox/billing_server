@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
+from app.password_policy import StrongPassword
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -16,4 +17,4 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     code: str = Field(min_length=6, max_length=6)
-    new_password: str = Field(min_length=6)
+    new_password: StrongPassword

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from app.config import IS_PRODUCTION, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.config import IS_PRODUCTION, ACCESS_TOKEN_EXPIRE_MINUTES, COOKIE_SAMESITE
 from app.database import get_db
 from app.auth.model import LoginRequest, TokenResponse, ForgotPasswordRequest, ResetPasswordRequest
 from app.auth.service import AuthService
+from app.email_service import send_password_reset_code
 from app.auth.dependencies import get_current_user
 from app.rate_limiting import limiter
 
@@ -32,7 +33,7 @@ async def login(request: Request, data: LoginRequest, response: Response, db: Se
         value=token,
         httponly=True,
         secure=IS_PRODUCTION,
-        samesite="none" if IS_PRODUCTION else "lax",
+        samesite=COOKIE_SAMESITE,
         # Keep the cookie's lifetime in lockstep with the JWT's own expiry -
         # a hardcoded value here previously drifted from
         # ACCESS_TOKEN_EXPIRE_MINUTES, and a too-short cookie logs users out
@@ -52,8 +53,15 @@ async def read_me(current_user: dict = Depends(get_current_user)):
 # "forgetting" their password.
 @router.post("/forgot-password")
 @limiter.limit("3/minute")
-async def forgot_password(request: Request, data: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    AuthService.request_password_reset(db, data.email)
+async def forgot_password(
+    request: Request,
+    data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    issued = AuthService.request_password_reset(db, data.email)
+    if issued:
+        background_tasks.add_task(send_password_reset_code, *issued)
     # Same response whether or not the email matched a real account - see
     # AuthService.request_password_reset's own comment.
     return {"message": "If an account exists for that email, a verification code has been sent."}
@@ -79,7 +87,7 @@ async def logout(response: Response):
         key="access_token",
         httponly=True,
         secure=IS_PRODUCTION,
-        samesite="none" if IS_PRODUCTION else "lax",
+        samesite=COOKIE_SAMESITE,
     )
     return {"message": "Logout successful"}
 

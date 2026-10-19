@@ -7,8 +7,10 @@ from apscheduler.triggers.cron import CronTrigger
 from app.database import engine, Base, SessionLocal
 from sqlalchemy import select
 from passlib.hash import bcrypt
-from app.config import IS_PRODUCTION
+from app.config import IS_PRODUCTION, ENABLE_API_DOCS
 from app.users import user_router
+from app.web_security import CsrfHeaderMiddleware, SecurityHeadersMiddleware
+from app.document_settings import document_settings_router
 from app.projects import project_router
 from app.project_files import file_router
 from app.project_files.retention import purge_stale_originals
@@ -32,7 +34,13 @@ from slowapi.middleware import SlowAPIMiddleware
 import app.entities
 
 
-app = FastAPI()
+# Interactive docs expose the full endpoint list - off in production unless
+# ENABLE_API_DOCS=true (see app/config.py).
+app = FastAPI(
+    docs_url="/docs" if ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_API_DOCS else None,
+)
 
 # Powers @limiter.limit(...) on /auth/login and /client-auth/login (see
 # those controllers) - registered on the real app this time, not the
@@ -41,13 +49,21 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
+# Reject cookie-authenticated writes that lack the CSRF header (see
+# app/web_security.py). Starlette runs the most recently added middleware
+# outermost, so adding this *before* CORS puts it inside it: a rejection
+# still carries the CORS headers, and the browser shows the real 403 instead
+# of an opaque network error.
+app.add_middleware(CsrfHeaderMiddleware)
+
 # CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:5174", "https://workspace.zybrannox.com"],  # frontend
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Explicit lists, not "*": only what the app actually sends.
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Requested-With", "Accept"],
     expose_headers=["Content-Length", "Content-Disposition"],  # so the frontend can read download size/filename
 )
 
@@ -59,6 +75,10 @@ app.add_middleware(
 
 # Compress JSON/text responses (project & employee lists, etc.) for faster loads in production
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+# Outermost: stamps security headers on every response, including 403/429s
+# produced by the middleware above.
+app.add_middleware(SecurityHeadersMiddleware)
 
 # App startup event - DB check
 @app.on_event("startup")
@@ -175,6 +195,7 @@ app.include_router(shared_document_router)
 app.include_router(client_auth_router)
 app.include_router(portal_router)
 app.include_router(job_request_router)
+app.include_router(document_settings_router)
 
 
 @app.get("/")

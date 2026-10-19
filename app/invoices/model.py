@@ -250,6 +250,10 @@ class CustomerSummary(BaseModel):
     # here crashed this response with a 500 (ResponseValidationError) for
     # any customer that had no email on file.
     email: Optional[str] = None
+    # Only set for a contact of a B2B company (see app/customers/billing.py)
+    # - what a printed document's "Billed To" block shows beyond the contact.
+    company_name: Optional[str] = None
+    company_address: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -258,6 +262,9 @@ class InvoiceDetailRead(InvoiceRead):
     project: Optional[ProjectSummary] = None
     customer: Optional[CustomerSummary] = None
     items: List[InvoiceItemRead] = []
+    # The payment ledger (see entities/invoice_payment.py), for the printed
+    # invoice's payment-history table.
+    payments: List[InvoicePaymentRead] = []
 
 
 # Returned by GET /invoices/preview/{project_id} - lets the invoice-creation

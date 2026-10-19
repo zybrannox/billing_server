@@ -1,5 +1,5 @@
 from fastapi import Depends, Cookie, HTTPException
-from jose import jwt, JWTError
+import jwt  # PyJWT
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.config import SECRET_KEY, ALGORITHM
@@ -14,7 +14,7 @@ def get_current_user(access_token: str = Cookie(None), db: Session = Depends(get
         username = payload.get("sub")
         if not username:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     # The JWT's claims are only a snapshot from login time - without this,

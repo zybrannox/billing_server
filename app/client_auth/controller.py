@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, Request, Response, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, HTTPException
 from sqlalchemy.orm import Session
 
-from app.config import IS_PRODUCTION, CLIENT_ACCESS_TOKEN_EXPIRE_MINUTES
+from app.config import IS_PRODUCTION, CLIENT_ACCESS_TOKEN_EXPIRE_MINUTES, COOKIE_SAMESITE
 from app.database import get_db
 from app.auth.dependencies import require_admin
 from app.entities import Customer, Company
@@ -18,13 +18,14 @@ from .model import (
 )
 from .service import ClientAuthService
 from .dependencies import get_current_client
+from app.email_service import send_password_reset_code
 
 router = APIRouter(prefix="/client-auth", tags=["Client Auth"])
 
 COOKIE_KWARGS = dict(
     httponly=True,
     secure=IS_PRODUCTION,
-    samesite="none" if IS_PRODUCTION else "lax",
+    samesite=COOKIE_SAMESITE,
 )
 
 
@@ -67,8 +68,15 @@ def logout(response: Response):
 
 @router.post("/forgot-password")
 @limiter.limit("3/minute")
-def forgot_password(request: Request, data: ClientForgotPasswordRequest, db: Session = Depends(get_db)):
-    ClientAuthService.request_password_reset(db, data.email)
+def forgot_password(
+    request: Request,
+    data: ClientForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    issued = ClientAuthService.request_password_reset(db, data.email)
+    if issued:
+        background_tasks.add_task(send_password_reset_code, *issued)
     return {"message": "If an account exists for that email, a verification code has been sent."}
 
 

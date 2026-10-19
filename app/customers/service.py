@@ -150,12 +150,12 @@ class CustomerService:
         return db.get(Customer, customer_id)
 
     # One call for the whole profile page (see CustomerProfile) - customer
-    # identity, every order, every invoice, and the summary numbers -
-    # instead of the frontend firing three separate requests. page_size is
-    # deliberately generous rather than paginated: a single customer's own
-    # order/invoice history is small enough to show in full on their own
-    # profile page, unlike the admin-wide Projects/Billing lists this data
-    # is drawn from. Note that's about display only - the stats below are
+    # identity, every order, the summary numbers and invoice/quotation
+    # counts - instead of the frontend firing several requests. Orders use a
+    # generous page_size rather than pagination: a single customer's own
+    # history is small enough to show in full on their own profile page.
+    # Invoices and quotations are only counted here - the Billing and
+    # Quotations drawers page through them separately. Note that's about display only - the stats below are
     # computed via their own unbounded aggregate queries, not by reducing
     # these capped lists, so a customer who ever does cross 500 projects/
     # invoices in real usage gets a display list that's (reasonably) capped
@@ -168,8 +168,9 @@ class CustomerService:
             return None
 
         projects, _ = get_all_projects(db, page=1, page_size=500, customer_id=customer_id)
-        invoices, _ = get_all_invoices(db, page=1, page_size=500, customer_id=customer_id)
-        quotations, _ = get_all_quotations(db, page=1, page_size=500, customer_id=customer_id)
+        # page_size=1: only the total is wanted, not the rows.
+        _, invoice_count = get_all_invoices(db, page=1, page_size=1, customer_id=customer_id)
+        _, quotation_count = get_all_quotations(db, page=1, page_size=1, customer_id=customer_id)
 
         total_orders = (
             db.query(func.count(Project.id)).filter(Project.customer_id == customer_id).scalar() or 0
@@ -209,8 +210,8 @@ class CustomerService:
                 pending_invoices=pending_invoices,
             ),
             projects=projects,
-            invoices=invoices,
-            quotations=quotations,
+            invoice_count=invoice_count,
+            quotation_count=quotation_count,
         )
 
     @staticmethod

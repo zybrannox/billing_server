@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 from app.datetime_utils import UTCDateTime
+from app.password_policy import StrongPassword
 
 
 class ClientLoginRequest(BaseModel):
@@ -36,7 +37,7 @@ class InviteLookupResponse(BaseModel):
 class ActivateAccountRequest(BaseModel):
     token: str
     email: EmailStr
-    password: str
+    password: StrongPassword
 
 
 class ClientForgotPasswordRequest(BaseModel):
@@ -46,4 +47,4 @@ class ClientForgotPasswordRequest(BaseModel):
 class ClientResetPasswordRequest(BaseModel):
     email: EmailStr
     code: str = Field(min_length=6, max_length=6)
-    new_password: str = Field(min_length=6)
+    new_password: StrongPassword

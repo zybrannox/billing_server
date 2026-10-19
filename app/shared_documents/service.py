@@ -38,10 +38,16 @@ def service_create_quotation_share_link(
 
 
 def service_get_document_path(db: Session, token: str) -> tuple[Path, str]:
-    doc = repository.get_by_token(db, token)
+    doc = repository.get_active_by_token(db, token)
     if not doc:
         raise HTTPException(status_code=404, detail="This link is invalid or has expired")
     path = repository.UPLOAD_DIR / doc.filename
     if not path.exists():
         raise HTTPException(status_code=404, detail="This link is invalid or has expired")
     return path, doc.display_name
+
+
+def service_revoke_share_link(db: Session, document_type: str, document_id: int) -> dict:
+    if not repository.revoke(db, document_type, document_id):
+        raise HTTPException(status_code=404, detail="This document has no shared link")
+    return {"message": "Shared link revoked"}

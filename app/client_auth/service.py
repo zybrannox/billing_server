@@ -1,3 +1,4 @@
+import hmac
 import secrets
 from datetime import datetime, timedelta
 
@@ -8,7 +9,7 @@ from fastapi import HTTPException, status
 
 from app.entities import ClientAccount, Customer, Company
 from app.security import create_client_access_token
-from app.email_service import generate_verification_code, send_password_reset_code
+from app.email_service import generate_verification_code
 
 INVITE_EXPIRY_DAYS = 7
 RESET_CODE_EXPIRY_MINUTES = 15
@@ -125,19 +126,20 @@ class ClientAuthService:
     # has nothing to reset; the invite link is what sets its first
     # password.
     @staticmethod
-    def request_password_reset(db: Session, email: str) -> None:
+    def request_password_reset(db: Session, email: str) -> tuple[str, str] | None:
         account = db.execute(
             select(ClientAccount).where(ClientAccount.email == email)
         ).scalar_one_or_none()
         if not account or not account.is_active or account.activated_at is None:
-            return
+            return None
 
         code = generate_verification_code()
         account.reset_code = code
         account.reset_code_expires_at = datetime.utcnow() + timedelta(minutes=RESET_CODE_EXPIRY_MINUTES)
         db.commit()
 
-        send_password_reset_code(account.email, code)
+        # Sent by the caller as a background task - see AuthService.
+        return account.email, code
 
     @staticmethod
     def reset_password(db: Session, email: str, code: str, new_password: str) -> None:
@@ -148,7 +150,7 @@ class ClientAuthService:
         valid = (
             account is not None
             and account.reset_code is not None
-            and account.reset_code == code
+            and hmac.compare_digest(account.reset_code, code)
             and account.reset_code_expires_at is not None
             and account.reset_code_expires_at >= datetime.utcnow()
         )

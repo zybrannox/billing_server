@@ -1,5 +1,5 @@
 from fastapi import Depends, Cookie, HTTPException
-from jose import jwt, JWTError
+import jwt  # PyJWT
 from sqlalchemy.orm import Session
 
 from app.config import CLIENT_SECRET_KEY, ALGORITHM
@@ -20,7 +20,7 @@ def get_current_client(client_access_token: str = Cookie(None), db: Session = De
         account_id = payload.get("sub")
         if not account_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     account = db.get(ClientAccount, int(account_id))

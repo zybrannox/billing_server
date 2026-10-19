@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from jose import jwt
+import jwt  # PyJWT
 from app.config import (
     SECRET_KEY,
     ALGORITHM,

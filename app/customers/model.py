@@ -66,11 +66,15 @@ class CustomerStats(BaseModel):
 
 
 # Powers GET /customers/{id}/profile - one call for the whole profile page
-# (identity, every order, every invoice, and the summary numbers) instead
-# of the frontend firing three separate requests and assembling them itself.
+# (identity, orders, the summary numbers and invoice/quotation counts)
+# instead of the frontend firing several requests and assembling them
+# itself. Invoices and quotations are counts only: the profile's Billing and
+# Quotations views are drawers that page through GET /invoices and
+# GET /quotations (?customer_id=...) on their own, so shipping every row here
+# just to show "Billing (12)" would be wasted weight.
 class CustomerProfile(BaseModel):
     customer: CustomerRead
     stats: CustomerStats
     projects: List[ProjectRead]
-    invoices: List[InvoiceRead]
-    quotations: List[QuotationRead]
+    invoice_count: int
+    quotation_count: int

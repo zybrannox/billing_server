@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, Integer, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
@@ -39,6 +40,12 @@ class SharedDocument(Base):
     # "Invoice-INV-2026-00042.pdf", not the opaque on-disk filename.
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # After this moment the public link stops working (see repository.
+    # get_active_by_token). Re-sharing the document pushes it out again.
+    # Nullable only for rows that predate the column.
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Set when someone explicitly turns the link off.
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )

@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from app.entities import UserRole
 from app.projects.model import ProjectRead
+from app.password_policy import StrongPassword
 
 class UserBase(BaseModel):
     username: str
@@ -12,7 +13,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str
+    password: StrongPassword
 
 
 class UserUpdate(BaseModel):
@@ -27,7 +28,7 @@ class UserUpdate(BaseModel):
 
 
 class UserPasswordUpdate(BaseModel):
-    new_password: str = Field(min_length=6)
+    new_password: StrongPassword
 
 
 class UserRead(UserBase):

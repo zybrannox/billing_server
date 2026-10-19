@@ -1,6 +1,7 @@
 import math
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+from app.customers.billing import customer_bill_to
 from .calculations import compute_quotation_total
 from .repository import (
     create_quotation,
@@ -48,7 +49,7 @@ def service_list(
     )
 
 
-def _quotation_detail_dict(quotation):
+def _quotation_detail_dict(quotation, db: Session | None = None):
     return {
         "id": quotation.id,
         "quotation_number": quotation.quotation_number,
@@ -63,7 +64,7 @@ def _quotation_detail_dict(quotation):
         "converted_project_id": quotation.converted_project_id,
         "converted_invoice_id": quotation.converted_invoice_id,
         "customer_name": quotation.customer_name,
-        "customer": quotation.customer,
+        "customer": customer_bill_to(db, quotation.customer) if db is not None else quotation.customer,
         "items": quotation.items,
     }
 
@@ -72,7 +73,7 @@ def service_get_details(db: Session, quotation_id: int):
     quotation = get_quotation(db, quotation_id)
     if not quotation:
         raise HTTPException(status_code=404, detail="Quotation not found")
-    return _quotation_detail_dict(quotation)
+    return _quotation_detail_dict(quotation, db)
 
 
 def service_update_status(db: Session, quotation_id: int, status: str):
@@ -87,7 +88,7 @@ def service_update_status(db: Session, quotation_id: int, status: str):
         )
 
     updated = update_quotation_status(db, quotation_id, status)
-    return _quotation_detail_dict(updated)
+    return _quotation_detail_dict(updated, db)
 
 
 def service_convert(db: Session, quotation_id: int, payload: QuotationConvertRequest, username: str):

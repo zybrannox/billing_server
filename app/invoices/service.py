@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.entities.project import Project
 from app.entities.customer import Customer
+from app.customers.billing import customer_bill_to
 from .calculations import compute_invoice_total
 from .repository import (
     create_invoice,
@@ -119,8 +120,9 @@ def _invoice_detail_dict(db: Session, invoice):
         "customer_name": f"{customer.first_name} {customer.last_name}" if customer else None,
         "project_type": project.project_type if project else None,
         "project": project,
-        "customer": customer,
+        "customer": customer_bill_to(db, customer),
         "items": invoice.items,
+        "payments": get_invoice_payments(db, invoice.id),
     }
 
 

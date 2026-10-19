@@ -1,10 +1,11 @@
+import hmac
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from passlib.hash import bcrypt
 from fastapi import HTTPException, status
 from app.entities import User
 from app.security import create_access_token
-from app.email_service import generate_verification_code, send_password_reset_code
+from app.email_service import generate_verification_code
 from sqlalchemy import select
 
 RESET_CODE_EXPIRY_MINUTES = 15
@@ -42,17 +43,19 @@ class AuthService:
     # account" by response content. The controller returns one fixed
     # message either way.
     @staticmethod
-    def request_password_reset(db: Session, email: str) -> None:
+    def request_password_reset(db: Session, email: str) -> tuple[str, str] | None:
         user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
         if not user or not user.is_active:
-            return
+            return None
 
         code = generate_verification_code()
         user.reset_code = code
         user.reset_code_expires_at = datetime.utcnow() + timedelta(minutes=RESET_CODE_EXPIRY_MINUTES)
         db.commit()
 
-        send_password_reset_code(user.email, code)
+        # (email, code) for the caller to send in the background - sending
+        # here would make a real account answer slower than an unknown one.
+        return user.email, code
 
     @staticmethod
     def reset_password(db: Session, email: str, code: str, new_password: str) -> None:
@@ -61,7 +64,7 @@ class AuthService:
         valid = (
             user is not None
             and user.reset_code is not None
-            and user.reset_code == code
+            and hmac.compare_digest(user.reset_code, code)
             and user.reset_code_expires_at is not None
             and user.reset_code_expires_at >= datetime.utcnow()
         )
