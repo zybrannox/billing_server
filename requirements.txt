@@ -40,5 +40,5 @@ tomli==2.3.0
 typing-inspection==0.4.2
 typing_extensions==4.16.0
 tzlocal==5.4.4
-uvicorn==0.38.0
+uvicorn==0.54.0
 wrapt==2.0.1
