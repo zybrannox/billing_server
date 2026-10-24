@@ -1,7 +1,8 @@
 """Session-token behaviour: signing, expiry, tampering, and the staff/client
 boundary. These pin the guarantees the auth layer relies on, independent of
 which JWT library implements them."""
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.datetime_utils import utcnow
 
 import jwt
 import pytest
@@ -51,7 +52,7 @@ def test_a_staff_token_is_refused_by_the_client_dependency(db):
 
 
 def test_expired_token_is_refused(db, staff):
-    expired = jwt.encode({"sub": "alan", "exp": datetime.utcnow() - timedelta(minutes=1)}, SECRET_KEY, algorithm=ALGORITHM)
+    expired = jwt.encode({"sub": "alan", "exp": utcnow() - timedelta(minutes=1)}, SECRET_KEY, algorithm=ALGORITHM)
     with pytest.raises(HTTPException) as err:
         get_current_user(access_token=expired, db=db)
     assert err.value.status_code == 401
@@ -72,7 +73,7 @@ def test_unsigned_alg_none_token_is_refused(db, staff):
 
 
 def test_token_signed_with_the_wrong_key_is_refused(db, staff):
-    forged = jwt.encode({"sub": "alan", "exp": datetime.utcnow() + timedelta(hours=1)}, "x" * 48, algorithm=ALGORITHM)
+    forged = jwt.encode({"sub": "alan", "exp": utcnow() + timedelta(hours=1)}, "x" * 48, algorithm=ALGORITHM)
     with pytest.raises(HTTPException):
         get_current_user(access_token=forged, db=db)
 

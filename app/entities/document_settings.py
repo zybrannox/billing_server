@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.datetime_utils import utcnow
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text, true
@@ -61,4 +62,4 @@ class DocumentSettings(Base):
     )
     footer_message: Mapped[str] = mapped_column(String(200), default="Thank you for your business.")
 
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

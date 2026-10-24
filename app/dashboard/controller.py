@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import require_admin
 from app.database import get_db
+from app.ttl_cache import get_or_compute
 from .model import DashboardSummary, RecentDelivery
 from .repository import get_recent_deliveries
 from .service import _serialize_recent_deliveries, service_get_summary
@@ -19,7 +20,7 @@ def get_summary(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    return service_get_summary(db, granularity=granularity)
+    return get_or_compute(("dashboard-summary", granularity), lambda: service_get_summary(db, granularity=granularity))
 
 
 # Deliberately its own lightweight endpoint rather than reusing /summary -
@@ -33,4 +34,7 @@ def get_delivery_notifications(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    return _serialize_recent_deliveries(db, get_recent_deliveries(db, limit=limit))
+    return get_or_compute(
+        ("delivery-notifications", limit),
+        lambda: _serialize_recent_deliveries(db, get_recent_deliveries(db, limit=limit)),
+    )

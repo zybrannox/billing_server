@@ -1,4 +1,5 @@
-from datetime import datetime
+from app.pagination import paginate
+from app.datetime_utils import utcnow
 from sqlalchemy.orm import Session, joinedload
 from app.entities.quotation import Quotation
 from app.entities.quotation_item import QuotationItem
@@ -53,7 +54,7 @@ def create_quotation(db: Session, payload: QuotationCreate):
 
         new_quotation.subtotal = round(subtotal, 2)
         new_quotation.amount = round(new_quotation.subtotal - new_quotation.discount_amount, 2)
-        year = (new_quotation.created_at or datetime.utcnow()).year
+        year = (new_quotation.created_at or utcnow()).year
         new_quotation.quotation_number = f"QUOTE-{year}-{new_quotation.id:05d}"
 
         db.commit()
@@ -100,7 +101,7 @@ def get_all_quotations(
 
     query = query.order_by(Quotation.created_at.desc())
     total = query.count()
-    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    items = paginate(query, page, page_size).all()
     return items, total
 
 
@@ -153,7 +154,7 @@ def convert_quotation_to_invoice(
         # pending design task - so the invoice can be raised immediately,
         # same as the ordinary "Mark Design Completed" -> Generate Invoice
         # flow, just skipping straight to the point that flow ends at.
-        new_project.design_completed_at = datetime.utcnow()
+        new_project.design_completed_at = utcnow()
         new_project.design_completed_by = username
 
         new_invoice = Invoice(
@@ -185,7 +186,7 @@ def convert_quotation_to_invoice(
                 )
             )
 
-        year = (new_invoice.created_at or datetime.utcnow()).year
+        year = (new_invoice.created_at or utcnow()).year
         new_invoice.invoice_number = f"INV-{year}-{new_invoice.id:05d}"
 
         quotation.status = "converted"

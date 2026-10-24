@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.entities import Project, ProjectFile
+from .upload_rules import verify_file
 
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -57,6 +58,14 @@ def save_streaming_file(upload_file, filename: str):
     # on the large files this app expects (up to 1GB/file).
     with file_location.open("wb") as buffer:
         shutil.copyfileobj(upload_file.file, buffer, length=1024 * 1024)
+
+    # The bytes must match what the name claims (see upload_rules.py); a
+    # rejected file is removed rather than left on disk.
+    try:
+        verify_file(file_location, filename)
+    except HTTPException:
+        file_location.unlink(missing_ok=True)
+        raise
 
     # Thumbnail generation is deferred to the first /files/thumbnail request
     # (see project_files/controller.py) rather than done here, so uploads

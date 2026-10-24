@@ -5,6 +5,7 @@ import json
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app import ttl_cache
 from app.config import IS_PRODUCTION
 
 # State-changing requests must carry this header (see the frontend's axios
@@ -87,3 +88,23 @@ class SecurityHeadersMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
+
+
+class CacheInvalidationMiddleware:
+    """Clears the in-process read cache (app/ttl_cache.py) after any
+    successful state-changing request, so cached dashboard numbers never lag
+    behind what the user just did."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] in _SAFE_METHODS:
+            return await self.app(scope, receive, send)
+
+        async def send_and_invalidate(message: Message) -> None:
+            if message["type"] == "http.response.start" and message["status"] < 400:
+                ttl_cache.clear()
+            await send(message)
+
+        await self.app(scope, receive, send_and_invalidate)

@@ -1,8 +1,8 @@
-import math
-from datetime import datetime
+from app.pagination import page_count, paginate
+from app.datetime_utils import utcnow
 
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
+from app.errors import NotFound, BadRequest
 
 from app.entities import Customer, Company, Project, ProjectFile, JobRequest, JobRequestFile
 from .model import JobRequestCreate, AttachJobRequestFilesRequest, JobRequestRead, JobRequestListResponse
@@ -48,14 +48,14 @@ class JobRequestService:
     def _get_owned(db: Session, client: dict, job_request_id: int) -> JobRequest:
         job_request = db.get(JobRequest, job_request_id)
         if not job_request:
-            raise HTTPException(status_code=404, detail="Job request not found")
+            raise NotFound("Job request")
 
         owns = job_request.customer_id == client["customer_id"]
         if not owns and client["company_id"]:
             owner = db.get(Customer, job_request.customer_id)
             owns = bool(owner and owner.company_id == client["company_id"])
         if not owns:
-            raise HTTPException(status_code=404, detail="Job request not found")
+            raise NotFound("Job request")
         return job_request
 
     @staticmethod
@@ -64,7 +64,7 @@ class JobRequestService:
         # files to their own still-open submission.
         job_request = db.get(JobRequest, job_request_id)
         if not job_request or job_request.customer_id != client["customer_id"]:
-            raise HTTPException(status_code=404, detail="Job request not found")
+            raise NotFound("Job request")
 
         for f in payload.files:
             db.add(
@@ -93,8 +93,8 @@ class JobRequestService:
             query = query.filter(JobRequest.customer_id == client["customer_id"])
 
         total = query.count()
-        items = query.order_by(JobRequest.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
-        total_pages = math.ceil(total / page_size) if page_size else 0
+        items = paginate(query.order_by(JobRequest.created_at.desc()), page, page_size).all()
+        total_pages = page_count(total, page_size)
         return JobRequestListResponse(
             items=[_to_read(db, jr) for jr in items],
             total=total,
@@ -116,8 +116,8 @@ class JobRequestService:
         if status:
             query = query.filter(JobRequest.status == status)
         total = query.count()
-        items = query.order_by(JobRequest.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
-        total_pages = math.ceil(total / page_size) if page_size else 0
+        items = paginate(query.order_by(JobRequest.created_at.desc()), page, page_size).all()
+        total_pages = page_count(total, page_size)
         return JobRequestListResponse(
             items=[_to_read(db, jr) for jr in items],
             total=total,
@@ -130,18 +130,18 @@ class JobRequestService:
     def get_for_staff(db: Session, job_request_id: int) -> JobRequestRead:
         job_request = db.get(JobRequest, job_request_id)
         if not job_request:
-            raise HTTPException(status_code=404, detail="Job request not found")
+            raise NotFound("Job request")
         return _to_read(db, job_request)
 
     @staticmethod
     def convert_to_project(db: Session, job_request_id: int, username: str) -> JobRequestRead:
         job_request = db.get(JobRequest, job_request_id)
         if not job_request:
-            raise HTTPException(status_code=404, detail="Job request not found")
+            raise NotFound("Job request")
         if job_request.status != "pending":
-            raise HTTPException(status_code=400, detail=f"This request is already {job_request.status}")
+            raise BadRequest(f"This request is already {job_request.status}")
 
-        now = datetime.utcnow()
+        now = utcnow()
         # Constructed directly (not via ProjectCreate/create_project), same
         # as create_invoice's own inline "new_project" branch (app/invoices/
         # repository.py) - this project exists to carry work a client
@@ -193,13 +193,13 @@ class JobRequestService:
     def reject(db: Session, job_request_id: int, username: str, reason: str) -> JobRequestRead:
         job_request = db.get(JobRequest, job_request_id)
         if not job_request:
-            raise HTTPException(status_code=404, detail="Job request not found")
+            raise NotFound("Job request")
         if job_request.status != "pending":
-            raise HTTPException(status_code=400, detail=f"This request is already {job_request.status}")
+            raise BadRequest(f"This request is already {job_request.status}")
 
         job_request.status = "rejected"
         job_request.rejection_reason = reason
-        job_request.reviewed_at = datetime.utcnow()
+        job_request.reviewed_at = utcnow()
         job_request.reviewed_by = username
 
         db.commit()

@@ -1,4 +1,4 @@
-from datetime import datetime
+from app.datetime_utils import utcnow
 
 import pytest
 from fastapi import HTTPException
@@ -16,8 +16,8 @@ def invoice(db):
         assigned_to="alan",
         priority="Normal",
         client_status="Confirmed",
-        start_date=datetime.utcnow(),
-        delivery_date=datetime.utcnow(),
+        start_date=utcnow(),
+        delivery_date=utcnow(),
     )
     db.add(project)
     db.commit()

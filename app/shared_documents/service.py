@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import HTTPException
+from app.errors import NotFound
 from sqlalchemy.orm import Session
 
 from app.invoices.repository import get_invoice
@@ -13,7 +14,7 @@ def service_create_invoice_share_link(
 ) -> str:
     invoice = get_invoice(db, invoice_id)
     if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
     doc = repository.upsert(
         db, "invoice", invoice_id, file_bytes, f"Invoice-{invoice.invoice_number}.pdf"
     )
@@ -30,7 +31,7 @@ def service_create_quotation_share_link(
 ) -> str:
     quotation = get_quotation(db, quotation_id)
     if not quotation:
-        raise HTTPException(status_code=404, detail="Quotation not found")
+        raise NotFound("Quotation")
     doc = repository.upsert(
         db, "quotation", quotation_id, file_bytes, f"Quotation-{quotation.quotation_number}.pdf"
     )

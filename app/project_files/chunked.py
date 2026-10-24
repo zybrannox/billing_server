@@ -15,8 +15,10 @@ from threading import Lock
 from typing import Dict, Set
 
 from fastapi import HTTPException
+from app.errors import BadRequest
 
 from .service import BLOCKED_EXTENSIONS, UPLOAD_DIR
+from .upload_rules import check_size, verify_file
 
 # Must match CHUNK_SIZE in src/utils/chunkedUpload.ts - the client computes
 # each chunk's byte range from it, and this is where those ranges are
@@ -95,8 +97,9 @@ def init_upload(filename: str, total_size: int, total_chunks: int) -> str:
         raise HTTPException(
             status_code=413, detail="File exceeds maximum size of 1GB"
         )
+    check_size(filename, total_size)
     if total_chunks < 1:
-        raise HTTPException(status_code=400, detail="Invalid chunk count")
+        raise BadRequest("Invalid chunk count")
 
     with _sessions_lock:
         _gc_stale_sessions()
@@ -122,7 +125,7 @@ def write_chunk(upload_id: str, chunk_index: int, data: bytes) -> None:
             status_code=404, detail="Upload session not found or expired"
         )
     if chunk_index < 0 or chunk_index >= session.total_chunks:
-        raise HTTPException(status_code=400, detail="Invalid chunk index")
+        raise BadRequest("Invalid chunk index")
 
     offset = chunk_index * CHUNK_SIZE
     with session.lock:
@@ -140,9 +143,16 @@ def complete_upload(upload_id: str) -> str:
         )
     if len(session.received) != session.total_chunks:
         missing = session.total_chunks - len(session.received)
-        raise HTTPException(
-            status_code=400, detail=f"Upload incomplete: {missing} chunk(s) missing"
-        )
+        raise BadRequest(f"Upload incomplete: {missing} chunk(s) missing")
+
+    # The bytes must match what the name claims (see upload_rules.py).
+    try:
+        verify_file(session.temp_path, session.filename)
+    except HTTPException:
+        with _sessions_lock:
+            _sessions.pop(upload_id, None)
+        session.temp_path.unlink(missing_ok=True)
+        raise
 
     stored_name = f"{uuid.uuid4().hex}{session.ext}"
     final_path = UPLOAD_DIR / stored_name

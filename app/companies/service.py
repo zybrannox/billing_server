@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from sqlalchemy.exc import IntegrityError
-from fastapi import HTTPException
+from app.errors import BadRequest
 from app.entities import Company, Customer, Project, Invoice
 from app.companies.model import CompanyStats, CompanyProfile
 
@@ -25,7 +25,7 @@ class CompanyService:
             db.refresh(new_company)
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status_code=400, detail="Duplicate company data")
+            raise BadRequest("Duplicate company data")
         return new_company
 
     @staticmethod
@@ -154,7 +154,7 @@ class CompanyService:
             db.refresh(company)
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status_code=400, detail="Duplicate company data")
+            raise BadRequest("Duplicate company data")
         return company
 
     @staticmethod

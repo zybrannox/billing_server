@@ -1,6 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
 from app.config import IS_PRODUCTION, ACCESS_TOKEN_EXPIRE_MINUTES, COOKIE_SAMESITE
 from app.database import get_db
 from app.auth.model import LoginRequest, TokenResponse, ForgotPasswordRequest, ResetPasswordRequest

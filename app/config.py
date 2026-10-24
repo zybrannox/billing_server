@@ -98,6 +98,10 @@ if COOKIE_SAMESITE not in {"lax", "strict", "none"}:
 
 # Interactive API docs (/docs, /redoc, /openapi.json) list every endpoint -
 # handy in development, free reconnaissance in production.
+# Production refuses to start when the database is behind the Alembic head
+# (see app/database/schema.py). Emergency bypass only.
+SKIP_SCHEMA_CHECK = os.getenv("SKIP_SCHEMA_CHECK", "false").lower() == "true"
+
 ENABLE_API_DOCS = os.getenv("ENABLE_API_DOCS", "false" if IS_PRODUCTION else "true").lower() == "true"
 
 # How long a WhatsApp/shared document link keeps working after it was last

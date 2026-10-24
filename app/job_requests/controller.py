@@ -2,6 +2,7 @@ import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, BackgroundTasks, HTTPException
+from app.errors import NotFound
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,6 +10,7 @@ from app.auth.dependencies import get_current_user
 from app.client_auth.dependencies import get_current_client
 from pathlib import Path
 from app.project_files.service import save_streaming_file, delete_uploaded_file
+from app.project_files.upload_rules import check_size
 from app.project_files.utils import generate_thumbnail
 from .model import (
     JobRequestCreate,
@@ -56,6 +58,7 @@ def upload_files_for_job_request(
         file.file.seek(0)
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(status_code=413, detail=f"File '{file.filename}' exceeds maximum size of 1GB")
+        check_size(file.filename or "", file_size)
         total_size += file_size
 
     if total_size > MAX_TOTAL_SIZE:
@@ -98,7 +101,7 @@ def delete_own_upload(path: str, client: dict = Depends(get_current_client)):
     safe_name = Path(path).name
     deleted = delete_uploaded_file(safe_name)
     if not deleted:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise NotFound("File")
     return {"message": "deleted"}
 
 

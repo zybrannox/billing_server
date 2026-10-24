@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.datetime_utils import utcnow
 from typing import Optional
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
@@ -26,5 +27,5 @@ class InvoicePayment(Base):
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     payment_method: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     payment_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    paid_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    paid_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     recorded_by: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

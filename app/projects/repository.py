@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.datetime_utils import utcnow
 from sqlalchemy import case, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.entities.project import Project
@@ -76,7 +77,7 @@ def get_all_projects(
         # ONGOING_VIEW_RETENTION_DAYS ago). Anything still in progress stays
         # visible indefinitely, no matter its age - only finished work moves
         # to Project History.
-        stale_cutoff = datetime.utcnow() - timedelta(days=ONGOING_VIEW_RETENTION_DAYS)
+        stale_cutoff = utcnow() - timedelta(days=ONGOING_VIEW_RETENTION_DAYS)
         query = query.filter(
             or_(
                 Project.delivered_at.is_(None),
@@ -170,7 +171,7 @@ def mark_design_completed(db: Session, project_id: int, username: str):
         return None
 
     if db_project.design_completed_at is None:
-        db_project.design_completed_at = datetime.utcnow()
+        db_project.design_completed_at = utcnow()
         db_project.design_completed_by = username
         db.commit()
         db.refresh(db_project)
@@ -189,7 +190,7 @@ def mark_print_completed(db: Session, project_id: int, username: str):
 
     changed = False
     if db_project.print_completed_at is None:
-        db_project.print_completed_at = datetime.utcnow()
+        db_project.print_completed_at = utcnow()
         db_project.print_completed_by = username
         changed = True
 
@@ -217,7 +218,7 @@ def mark_delivered(db: Session, project_id: int, username: str, on_credit: bool 
         return None
 
     if db_project.delivered_at is None:
-        db_project.delivered_at = datetime.utcnow()
+        db_project.delivered_at = utcnow()
         db_project.delivered_by = username
         db_project.delivered_on_credit = on_credit
         db.commit()
@@ -235,7 +236,7 @@ def mark_notified(db: Session, project_id: int, username: str):
     if not db_project:
         return None
 
-    db_project.notified_at = datetime.utcnow()
+    db_project.notified_at = utcnow()
     db_project.notified_by = username
     db.commit()
     db.refresh(db_project)

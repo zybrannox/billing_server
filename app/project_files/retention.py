@@ -14,7 +14,8 @@ reachable on demand via POST /files/purge-stale (admin only) - handy for
 ops and for verifying the job actually works without waiting a week.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.datetime_utils import utcnow
 
 from sqlalchemy import exists
 from sqlalchemy.orm import Session
@@ -59,7 +60,7 @@ def purge_stale_originals(db: Session) -> dict:
     one bad file (e.g. already missing from disk) shouldn't abort the
     whole run; each file is handled independently.
     """
-    cutoff = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
+    cutoff = utcnow() - timedelta(days=RETENTION_DAYS)
 
     candidates = (
         db.query(ProjectFile)
@@ -107,7 +108,7 @@ def purge_stale_originals(db: Session) -> dict:
                 print(f"[retention] Failed to delete original for {f.path}: {e}")
                 continue
 
-        f.original_deleted_at = datetime.utcnow()
+        f.original_deleted_at = utcnow()
         purged += 1
 
     db.commit()

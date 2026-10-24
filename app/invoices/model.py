@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Literal, Optional
 from datetime import datetime
 from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
+from app.response_model import ResponseModel
 
 # No payment gateway involved anywhere in this app - these are recorded
 # manually by an admin after money changed hands some other way (cash in
@@ -49,7 +50,7 @@ class InvoiceItemCreate(BaseModel):
         return self
 
 
-class InvoiceItemRead(BaseModel):
+class InvoiceItemRead(ResponseModel):
     id: int
     description: Optional[str] = None
     width: float
@@ -169,7 +170,7 @@ class RecordPaymentRequest(BaseModel):
     payment_reference: Optional[str] = None
 
 
-class InvoicePaymentRead(BaseModel):
+class InvoicePaymentRead(ResponseModel):
     id: int
     # Signed - a negative entry is an admin correcting the advance downward.
     amount: float
@@ -181,13 +182,13 @@ class InvoicePaymentRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class InvoiceRead(BaseModel):
+class InvoiceRead(ResponseModel):
     id: int
     project_id: int
     subtotal: float
     discount_amount: float
     amount: float
-    status: str
+    status: Literal["pending", "paid", "cancelled"]
     due_date: OptionalUTCDateTime = None
     invoice_number: str
     created_at: UTCDateTime
@@ -207,7 +208,7 @@ class InvoiceRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ProjectFileSummary(BaseModel):
+class ProjectFileSummary(ResponseModel):
     original_name: Optional[str] = None
     # width/height: a physical-size *estimate* in inches, derived client-side
     # from an assumed 96 DPI (see getImageDimensions in the frontend) - not
@@ -227,7 +228,7 @@ class ProjectFileSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ProjectSummary(BaseModel):
+class ProjectSummary(ResponseModel):
     id: int
     project_type: str
     description: Optional[str] = None
@@ -241,7 +242,7 @@ class ProjectSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CustomerSummary(BaseModel):
+class CustomerSummary(ResponseModel):
     first_name: str
     last_name: str
     contact_number: str
@@ -269,7 +270,7 @@ class InvoiceDetailRead(InvoiceRead):
 
 # Returned by GET /invoices/preview/{project_id} - lets the invoice-creation
 # screen show "Bill To" / order details before any Invoice row exists yet.
-class InvoicePreviewRead(BaseModel):
+class InvoicePreviewRead(ResponseModel):
     project: ProjectSummary
     customer: Optional[CustomerSummary] = None
 
@@ -277,14 +278,14 @@ class InvoicePreviewRead(BaseModel):
 # Returned by GET /invoices/payment-status/{project_id} - gates the
 # "Deliver" action on a project (see Projects.tsx's onMarkDelivered) on
 # its most recent invoice actually being paid, not just present.
-class ProjectPaymentStatus(BaseModel):
+class ProjectPaymentStatus(ResponseModel):
     is_paid: bool
     invoice_number: Optional[str] = None
     invoice_status: Optional[str] = None
     balance_due: Optional[float] = None
 
 
-class InvoiceListResponse(BaseModel):
+class InvoiceListResponse(ResponseModel):
     items: List[InvoiceRead]
     total: int
     page: int

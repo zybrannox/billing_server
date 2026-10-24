@@ -1,6 +1,7 @@
 import smtplib
 import ssl
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.datetime_utils import utcnow
 
 import pytest
 from passlib.hash import bcrypt
@@ -113,7 +114,7 @@ def test_forgot_password_answers_identically_for_known_and_unknown_emails(client
 
 def test_reset_code_is_single_use_and_checked_in_constant_time(client, db, staff_user):
     staff_user.reset_code = "654321"
-    staff_user.reset_code_expires_at = datetime.utcnow() + timedelta(minutes=10)
+    staff_user.reset_code_expires_at = utcnow() + timedelta(minutes=10)
     db.commit()
     good = {"email": "alan@example.com", "code": "654321", "new_password": "a brand new passphrase"}
 
@@ -124,7 +125,7 @@ def test_reset_code_is_single_use_and_checked_in_constant_time(client, db, staff
 
 def test_reset_rejects_a_weak_new_password(client, db, staff_user):
     staff_user.reset_code = "111222"
-    staff_user.reset_code_expires_at = datetime.utcnow() + timedelta(minutes=10)
+    staff_user.reset_code_expires_at = utcnow() + timedelta(minutes=10)
     db.commit()
     r = client.post(
         "/auth/reset-password",

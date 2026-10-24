@@ -26,6 +26,8 @@ def get_current_client(client_access_token: str = Cookie(None), db: Session = De
     account = db.get(ClientAccount, int(account_id))
     if not account or not account.is_active or account.activated_at is None:
         raise HTTPException(status_code=401, detail="Account no longer exists or is inactive")
+    if payload.get("tv", 0) != (account.token_version or 0):
+        raise HTTPException(status_code=401, detail="Session has been signed out")
 
     customer = db.get(Customer, account.customer_id)
     if not customer:

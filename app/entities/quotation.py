@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.datetime_utils import utcnow
 from typing import Optional
 from sqlalchemy import String, Integer, Float, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -19,7 +20,7 @@ class Quotation(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     quotation_number: Mapped[Optional[str]] = mapped_column(String(50), unique=True, index=True, nullable=True)
-    customer_id: Mapped[int] = mapped_column(Integer, ForeignKey("customers.id"), nullable=False)
+    customer_id: Mapped[int] = mapped_column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
     # Free text, same as Project.project_type - not a closed enum (see
     # admin/pages/SystemSetup.tsx's admin-managed project type catalog).
     project_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -31,9 +32,9 @@ class Quotation(Base):
     # "expired" is never stored - it's derived client-side from valid_until
     # vs now while still pending, purely a display badge, so there's no
     # background job needed to flip it.
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
     valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # Set together once this quotation is converted (see service_convert) -
     # the audit trail of exactly what it became.
     converted_project_id: Mapped[Optional[int]] = mapped_column(

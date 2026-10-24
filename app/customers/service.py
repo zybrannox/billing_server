@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, or_, func
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
+from app.errors import BadRequest
 from app.entities import Customer, Project, Invoice
 from app.projects.repository import get_all_projects
 from app.invoices.repository import get_all_invoices
@@ -19,7 +20,7 @@ class CustomerService:
             ).scalar_one_or_none()
 
             if exists:
-                raise HTTPException(status_code=400, detail="Email already registered")
+                raise BadRequest("Email already registered")
 
         new_customer = Customer(
             first_name=customer.first_name,
@@ -35,7 +36,7 @@ class CustomerService:
             db.refresh(new_customer)
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status_code=400, detail="Duplicate customer data")
+            raise BadRequest("Duplicate customer data")
 
         return new_customer
 
@@ -228,7 +229,7 @@ class CustomerService:
             db.refresh(customer)
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status_code=400, detail="Duplicate customer data")
+            raise BadRequest("Duplicate customer data")
 
         return customer
 

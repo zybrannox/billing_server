@@ -29,6 +29,8 @@ pydantic_core==2.41.5
 PyJWT==2.15.1
 python-dotenv==1.2.4
 python-multipart==0.0.32
+psutil==7.2.2
+sentry-sdk==2.72.0
 six==1.17.0
 slowapi==0.1.9
 SQLAlchemy==2.0.45

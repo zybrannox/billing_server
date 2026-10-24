@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.datetime_utils import utcnow
 
 import pytest
 
@@ -15,14 +16,14 @@ def isolated_upload_dir(tmp_path, monkeypatch):
 def test_new_link_works_and_expires_30_days_out(db, isolated_upload_dir):
     doc = repository.upsert(db, "invoice", 1, b"%PDF-1", "Invoice-1.pdf")
     assert repository.get_active_by_token(db, doc.token) is not None
-    days = (doc.expires_at - datetime.utcnow()).days
+    days = (doc.expires_at - utcnow()).days
     assert 28 <= days <= 30
     assert (isolated_upload_dir / doc.filename).read_bytes() == b"%PDF-1"
 
 
 def test_expired_link_stops_working(db):
     doc = repository.upsert(db, "invoice", 1, b"x", "a.pdf")
-    doc.expires_at = datetime.utcnow() - timedelta(seconds=1)
+    doc.expires_at = utcnow() - timedelta(seconds=1)
     db.commit()
     assert repository.get_active_by_token(db, doc.token) is None
     with pytest.raises(HTTPException) as err:
@@ -47,7 +48,7 @@ def test_revoking_something_never_shared_reports_false(db):
 def test_sharing_again_reopens_a_revoked_link_and_refreshes_expiry(db):
     first = repository.upsert(db, "invoice", 3, b"v1", "a.pdf")
     repository.revoke(db, "invoice", 3)
-    first.expires_at = datetime.utcnow() - timedelta(days=5)
+    first.expires_at = utcnow() - timedelta(days=5)
     db.commit()
 
     again = repository.upsert(db, "invoice", 3, b"v2", "a.pdf")

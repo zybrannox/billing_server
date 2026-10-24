@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.audit import record_audit, label_of
+from app.entities import Quotation
 from app.auth.dependencies import require_admin, get_current_user
 from app.invoices.model import InvoiceRead
 from .model import (
@@ -58,7 +60,12 @@ def update_status(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    return service_update_status(db, quotation_id, payload.status)
+    quotation = service_update_status(db, quotation_id, payload.status)
+    record_audit(
+        db, _user["username"], f"quotation.{payload.status}", "quotation", quotation_id,
+        {"label": quotation.quotation_number},
+    )
+    return quotation
 
 
 @router.post("/{quotation_id}/convert", response_model=InvoiceRead)
@@ -73,4 +80,7 @@ def convert_to_invoice(
 
 @router.delete("/{quotation_id}")
 def delete_quotation(quotation_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
-    return service_delete(db, quotation_id)
+    label = label_of(db, Quotation, quotation_id, "quotation_number")
+    result = service_delete(db, quotation_id)
+    record_audit(db, _admin["username"], "quotation.delete", "quotation", quotation_id, {"label": label})
+    return result

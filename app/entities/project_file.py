@@ -1,4 +1,4 @@
-from datetime import datetime
+from app.datetime_utils import utcnow
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
@@ -37,7 +37,7 @@ class ProjectFile(Base):
     pixel_width = Column(Integer, nullable=True)
     pixel_height = Column(Integer, nullable=True)
     downloaded = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     # Set when the weekly retention job (see app/project_files/retention.py)
     # permanently deletes the original file from disk to save storage -
     # null means the original is still there. The thumbnail and this row

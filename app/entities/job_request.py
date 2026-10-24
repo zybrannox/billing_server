@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import datetime
+from app.datetime_utils import utcnow
 
 from sqlalchemy import String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,7 +24,7 @@ class JobRequest(Base):
         ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False, index=True)
     # Set once staff converts this request into a real, billable Project -
     # SET NULL (not CASCADE) so deleting the resulting project doesn't
     # silently delete the client's original request/history.
@@ -31,6 +32,6 @@ class JobRequest(Base):
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
     )
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

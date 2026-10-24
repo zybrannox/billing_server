@@ -1,6 +1,8 @@
+from app.pagination import page_count
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
+from app.errors import NotFound
 from app.entities.project import Project
 from app.invoices.repository import get_latest_invoice_for_project
 from .repository import (
@@ -16,7 +18,6 @@ from .repository import (
     mark_notified,
     toggle_pin,
 )
-import math
 from .model import ProjectCreate, ProjectUpdate, ProjectListResponse
 from app.project_files.service import delete_project_files
 
@@ -28,7 +29,7 @@ def service_create(db: Session, payload: ProjectCreate):
 def service_get(db: Session, project_id: int):
     result = get_project(db, project_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
     return result
 
 
@@ -58,7 +59,7 @@ def service_list(
         company_id=company_id,
         view=view,
     )
-    total_pages = math.ceil(total / page_size) if page_size else 0
+    total_pages = page_count(total, page_size)
     return ProjectListResponse(
         items=items,
         total=total,
@@ -76,7 +77,7 @@ def service_update(db: Session, project_id: int, payload: ProjectUpdate):
     if payload.print_status == "Completed":
         project = get_project(db, project_id)
         if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise NotFound("Project")
         # Only gate the actual transition into Completed - re-saving a row
         # that's already Completed (editing some other field) shouldn't
         # retroactively break on rows that predate this rule.
@@ -88,21 +89,21 @@ def service_update(db: Session, project_id: int, payload: ProjectUpdate):
 
     updated = update_project(db, project_id, payload)
     if not updated:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
     return updated
 
 
 def service_mark_design_completed(db: Session, project_id: int, username: str):
     project = get_project(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
     return mark_design_completed(db, project_id, username)
 
 
 def service_mark_print_completed(db: Session, project_id: int, username: str):
     project = get_project(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
     # Same rule service_update enforces for this transition via the generic
     # edit path - the real security boundary lives here and there, not in
     # the frontend button's disabled state, which is just a UX nicety.
@@ -123,7 +124,7 @@ def service_mark_delivered(
 ):
     project = get_project(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
     # Enforce the full lifecycle order server-side - the frontend also
     # disables the Delivered button until both conditions are met, but
     # that's a UX nicety, not a security boundary; the real guarantee lives
@@ -177,21 +178,21 @@ def service_mark_delivered(
 def service_mark_notified(db: Session, project_id: int, username: str):
     project = get_project(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
     return mark_notified(db, project_id, username)
 
 
 def service_toggle_pin(db: Session, project_id: int):
     project = toggle_pin(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
     return project
 
 
 def service_delete(db: Session, project_id: int):
     project = get_project(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
 
     file_paths = [f.path for f in project.files]
 

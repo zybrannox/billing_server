@@ -1,9 +1,12 @@
-import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from app.pagination import page_count
+from fastapi import APIRouter, Depends, Query
+from app.errors import NotFound
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.audit import record_audit, label_of
+from app.entities import Company
 from app.auth.dependencies import require_admin, get_current_user
 from app.companies.model import (
     CompanyCreate,
@@ -41,7 +44,7 @@ def get_companies(
     _user: dict = Depends(get_current_user),
 ):
     items, total = CompanyService.get_all_companies(db, page=page, page_size=page_size, search=search)
-    total_pages = math.ceil(total / page_size) if page_size else 0
+    total_pages = page_count(total, page_size)
     return CompanyListResponse(
         items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
     )
@@ -55,7 +58,7 @@ def get_company(
 ):
     company = CompanyService.get_company_by_id(db, company_id)
     if not company:
-        raise HTTPException(404, "Company not found")
+        raise NotFound("Company")
     return company
 
 
@@ -67,7 +70,7 @@ def get_company_profile(
 ):
     profile = CompanyService.get_company_profile(db, company_id)
     if not profile:
-        raise HTTPException(404, "Company not found")
+        raise NotFound("Company")
     return profile
 
 
@@ -80,7 +83,7 @@ def update_company(
 ):
     updated = CompanyService.update_company(db, company_id, update)
     if not updated:
-        raise HTTPException(404, "Company not found")
+        raise NotFound("Company")
     return updated
 
 
@@ -90,7 +93,9 @@ def delete_company(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
+    label = label_of(db, Company, company_id, "name")
     deleted = CompanyService.delete_company(db, company_id)
     if not deleted:
-        raise HTTPException(404, "Company not found")
+        raise NotFound("Company")
+    record_audit(db, _admin["username"], "company.delete", "company", company_id, {"label": label})
     return {"message": "Company deleted successfully"}

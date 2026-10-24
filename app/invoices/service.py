@@ -1,7 +1,8 @@
-import math
-from datetime import datetime
+from app.pagination import page_count
+from app.datetime_utils import utcnow
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+from app.errors import NotFound, BadRequest
 from app.entities.project import Project
 from app.entities.customer import Customer
 from app.customers.billing import customer_bill_to
@@ -26,7 +27,7 @@ def service_create(db: Session, payload: InvoiceCreate, username: str):
         # request surfaces as an ordinary 404 instead.
         project_exists = db.query(Project.id).filter(Project.id == payload.project_id).first()
         if not project_exists:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise NotFound("Project")
 
         # A project can legitimately end up with more than one invoice over
         # its lifetime (a cancelled one re-invoiced), but never two open at
@@ -44,7 +45,7 @@ def service_create(db: Session, payload: InvoiceCreate, username: str):
         # brand-new project/invoice would belong to instead of a project id.
         customer_exists = db.query(Customer.id).filter(Customer.id == payload.new_project.customer_id).first()
         if not customer_exists:
-            raise HTTPException(status_code=404, detail="Customer not found")
+            raise NotFound("Customer")
 
     subtotal = compute_invoice_total(payload.items)
 
@@ -82,7 +83,7 @@ def service_list(
     items, total = get_all_invoices(
         db, page=page, page_size=page_size, search=search, customer_id=customer_id, company_id=company_id
     )
-    total_pages = math.ceil(total / page_size) if page_size else 0
+    total_pages = page_count(total, page_size)
     return InvoiceListResponse(
         items=items,
         total=total,
@@ -94,7 +95,7 @@ def service_list(
 def service_get(db: Session, invoice_id: int):
     invoice = get_invoice(db, invoice_id)
     if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
     return invoice
 
 
@@ -129,14 +130,14 @@ def _invoice_detail_dict(db: Session, invoice):
 def service_get_details(db: Session, invoice_id: int):
     invoice = get_invoice(db, invoice_id)
     if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
     return _invoice_detail_dict(db, invoice)
 
 
 def service_get_invoice_preview(db: Session, project_id: int):
     project, customer = get_project_with_customer(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
     return {"project": project, "customer": customer}
 
 
@@ -167,7 +168,7 @@ VALID_STATUSES = {"pending", "paid", "cancelled"}
 def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate, username: str | None = None):
     invoice = get_invoice(db, invoice_id)
     if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
 
     # "paid" and "cancelled" are terminal - once there, neither Mark Paid
     # nor Cancel should be able to move it anywhere else. The frontend
@@ -183,13 +184,13 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate, usernam
                 detail=f"This invoice is already {invoice.status} - its status can't be changed.",
             )
         if payload.status not in VALID_STATUSES:
-            raise HTTPException(status_code=400, detail=f"Unknown status '{payload.status}'")
+            raise BadRequest(f"Unknown status '{payload.status}'")
         if payload.status == "paid":
             # Revenue reporting (dashboard/repository.py) buckets by when an
             # invoice actually became paid, not created_at - has to be set
             # on this path too, not just service_mark_paid below, since
             # this generic admin update can also land status on "paid".
-            payload = payload.model_copy(update={"paid_at": datetime.utcnow()})
+            payload = payload.model_copy(update={"paid_at": utcnow()})
 
     # Full line-item edit (admin-only, see controller.py) - only while
     # pending, same terminal-state rule as discount_amount below. Recomputes
@@ -205,7 +206,7 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate, usernam
                 detail=f"This invoice is already {invoice.status} - its items can't be changed.",
             )
         if not payload.items:
-            raise HTTPException(status_code=400, detail="An invoice needs at least one line item")
+            raise BadRequest("An invoice needs at least one line item")
 
         new_subtotal = compute_invoice_total(payload.items)
         effective_discount = (
@@ -289,7 +290,7 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate, usernam
 
     updated = update_invoice(db, invoice_id, payload, username)
     if not updated:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
     return updated
 
 def service_mark_paid(
@@ -305,7 +306,7 @@ def service_mark_paid(
     service_update's status handling: only while still pending."""
     invoice = get_invoice(db, invoice_id)
     if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
 
     if invoice.status != "pending":
         raise HTTPException(
@@ -323,11 +324,11 @@ def service_mark_paid(
         payment_method=payment_method,
         payment_reference=payment_reference,
         advance_amount=invoice.amount,
-        paid_at=datetime.utcnow(),
+        paid_at=utcnow(),
     )
     updated = update_invoice(db, invoice_id, payload, username)
     if not updated:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
     return updated
 
 
@@ -346,7 +347,7 @@ def service_record_payment(
     (the invoice only stores one of each, not a per-payment ledger)."""
     invoice = get_invoice(db, invoice_id)
     if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
 
     if invoice.status != "pending":
         raise HTTPException(
@@ -367,22 +368,22 @@ def service_record_payment(
         advance_amount=invoice.amount if settled else new_advance,
         payment_method=payment_method,
         payment_reference=payment_reference,
-        **({"status": "paid", "paid_at": datetime.utcnow()} if settled else {}),
+        **({"status": "paid", "paid_at": utcnow()} if settled else {}),
     )
     updated = update_invoice(db, invoice_id, payload, username)
     if not updated:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
     return updated
 
 
 def service_get_payments(db: Session, invoice_id: int):
     if not get_invoice(db, invoice_id):
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
     return get_invoice_payments(db, invoice_id)
 
 
 def service_delete(db: Session, invoice_id: int):
     success = delete_invoice(db, invoice_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise NotFound("Invoice")
     return {"message": "Invoice deleted successfully"}

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form, BackgroundTasks
+from app.errors import NotFound, BadRequest
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -28,6 +29,7 @@ from typing import List, Optional
 import io
 import json
 import mimetypes
+from .upload_rules import check_size
 import os
 import uuid
 import zipfile
@@ -120,6 +122,7 @@ def upload_files(
                 status_code=413,
                 detail=f"File '{file.filename}' exceeds maximum size of 1GB"
             )
+        check_size(file.filename or "", file_size)
         
         total_size += file_size
     
@@ -138,7 +141,7 @@ def upload_files(
 
     project = get_project(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
 
     saved_files = []
     for file in files:
@@ -194,6 +197,7 @@ def upload_files_standalone(
                 status_code=413,
                 detail=f"File '{file.filename}' exceeds maximum size of 1GB"
             )
+        check_size(file.filename or "", file_size)
 
         total_size += file_size
 
@@ -238,7 +242,7 @@ def delete_uploaded_file_endpoint(filename: str, db: Session = Depends(get_db), 
 
     deleted = delete_uploaded_file(safe_filename)
     if not deleted:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise NotFound("File")
 
     # Scrub the file from whichever project had already linked it - path is
     # unique and indexed, so this is one targeted delete instead of loading
@@ -281,7 +285,7 @@ def attach_files(project_id: int, payload: AttachFilesRequest, db: Session = Dep
 
     project = get_project(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise NotFound("Project")
 
     entries = [
         {
@@ -321,7 +325,7 @@ def get_thumbnail(filename: str, current_user: dict = Depends(get_current_user))
             # XSS path the moment a non-image type became uploadable.
             file_path = UPLOAD_DIR / filename
             if not file_path.exists():
-                raise HTTPException(status_code=404, detail="File not found")
+                raise NotFound("File")
             media_type = mimetypes.guess_type(filename)[0] or ""
             if not media_type.startswith("image/"):
                 raise HTTPException(status_code=404, detail="No thumbnail available")
@@ -351,7 +355,7 @@ def download_file(
                 detail="This file's original was automatically removed after "
                 "7 days on a completed project. Only the thumbnail remains.",
             )
-        raise HTTPException(status_code=404, detail="File not found")
+        raise NotFound("File")
 
     # mark_file_downloaded scans every project with any files to find which
     # one(s) reference this filename - real work, and it was running before
@@ -433,7 +437,7 @@ def view_file(
                 detail="This file's original was automatically removed after "
                 "7 days on a completed project. Only the thumbnail remains.",
             )
-        raise HTTPException(status_code=404, detail="File not found")
+        raise NotFound("File")
 
     file_size = file_path.stat().st_size
     range_header = request.headers.get("range")
@@ -447,7 +451,7 @@ def view_file(
     # a file that predates that allowlist, or reached disk some other way,
     # still can't be served back as executable/renderable content.
     if not media_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Not an image file")
+        raise BadRequest("Not an image file")
 
     def iterfile(start=0, end=file_size - 1):
         with open(file_path, "rb") as f:

@@ -1,4 +1,6 @@
-from datetime import datetime, timedelta
+from app.pagination import paginate
+from datetime import timedelta
+from app.datetime_utils import utcnow
 from sqlalchemy import case
 from sqlalchemy.orm import Session, joinedload
 from app.entities.invoice import Invoice
@@ -48,7 +50,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
         # until the whole function's final db.commit().
         project_id = payload.project_id
         if payload.new_project:
-            now = datetime.utcnow()
+            now = utcnow()
             new_project = Project(
                 project_type=payload.new_project.project_type,
                 customer_id=payload.new_project.customer_id,
@@ -90,7 +92,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
             if customer and customer.company_id:
                 company = db.get(Company, customer.company_id)
                 if company and company.payment_terms_days > 0:
-                    due_date = datetime.utcnow() + timedelta(days=company.payment_terms_days)
+                    due_date = utcnow() + timedelta(days=company.payment_terms_days)
 
         new_invoice = Invoice(
             project_id=project_id,
@@ -149,7 +151,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
         new_invoice.amount = round(new_invoice.subtotal - new_invoice.discount_amount, 2)
         # invoice_number depends on the row's own id, so it can only be
         # generated after the insert - format: INV-<year>-<id, zero-padded>.
-        year = (new_invoice.created_at or datetime.utcnow()).year
+        year = (new_invoice.created_at or utcnow()).year
         new_invoice.invoice_number = f"INV-{year}-{new_invoice.id:05d}"
 
         db.commit()
@@ -171,6 +173,25 @@ def get_latest_invoice_for_project(db: Session, project_id: int):
         .order_by(Invoice.created_at.desc())
         .first()
     )
+
+
+def get_latest_invoice_statuses(db: Session, project_ids: list[int]) -> dict[int, str]:
+    """{project_id: status of its most recent invoice} in one query - the
+    batch form of get_latest_invoice_for_project for lists (one query per
+    row made the delivery-notification bell fire a query per delivery on
+    every poll)."""
+    if not project_ids:
+        return {}
+    rows = (
+        db.query(Invoice.project_id, Invoice.status)
+        .filter(Invoice.project_id.in_(project_ids))
+        .order_by(Invoice.project_id, Invoice.created_at.desc(), Invoice.id.desc())
+        .all()
+    )
+    latest: dict[int, str] = {}
+    for project_id, status in rows:
+        latest.setdefault(project_id, status)
+    return latest
 
 
 def get_invoice(db: Session, invoice_id: int):
@@ -243,7 +264,7 @@ def get_all_invoices(
 
     query = query.order_by(_INVOICE_STATUS_RANK, Invoice.created_at.desc())
     total = query.count()
-    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    items = paginate(query, page, page_size).all()
     return items, total
 
 def get_invoice_payments(db: Session, invoice_id: int):

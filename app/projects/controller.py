@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.audit import record_audit, label_of
+from app.entities import Project
 from app.auth.dependencies import get_current_user
 from .model import ProjectCreate, ProjectUpdate, ProjectRead, ProjectBulkDelete, ProjectListResponse
 from .service import (
@@ -83,12 +85,17 @@ def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depend
 
 @router.delete("/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    return service_delete(db, project_id)
+    label = label_of(db, Project, project_id, "project_type")
+    result = service_delete(db, project_id)
+    record_audit(db, current_user["username"], "project.delete", "project", project_id, {"label": label})
+    return result
 
 
 @router.post("/bulk-delete")
 def bulk_delete(payload: ProjectBulkDelete, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    return service_delete_bulk(db, payload.ids)
+    result = service_delete_bulk(db, payload.ids)
+    record_audit(db, current_user["username"], "project.bulk_delete", "project", None, {"ids": list(payload.ids)})
+    return result
 
 
 # Auth-gated (any logged-in employee or admin, per get_current_user) and

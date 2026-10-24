@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import datetime
+from app.datetime_utils import utcnow
 
 from sqlalchemy import String, Float, Integer, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,4 +34,4 @@ class Company(Base):
     # time. Null means no limit is tracked.
     credit_limit: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

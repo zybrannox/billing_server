@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
+from app.errors import BadRequest
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
@@ -33,7 +34,7 @@ def service_update(db: Session, payload: DocumentSettingsUpdate) -> DocumentSett
     changes = payload.model_dump(exclude_unset=True)
     if changes.get("theme") == "custom" or (settings.theme == "custom" and "theme" not in changes):
         if not (changes.get("custom_color") or settings.custom_color):
-            raise HTTPException(status_code=400, detail="Pick a colour for the custom theme.")
+            raise BadRequest("Pick a colour for the custom theme.")
     for key, value in changes.items():
         setattr(settings, key, value)
     return _to_read(save_settings(db, settings))
@@ -55,7 +56,7 @@ async def service_set_logo(db: Session, file: UploadFile) -> DocumentSettingsRea
     except (UnidentifiedImageError, OSError):
         ext = None
     if not ext:
-        raise HTTPException(status_code=400, detail="Logo must be a PNG, JPEG or WebP image.")
+        raise BadRequest("Logo must be a PNG, JPEG or WebP image.")
 
     BRANDING_DIR.mkdir(parents=True, exist_ok=True)
     filename = f"logo-{uuid.uuid4().hex}.{ext}"

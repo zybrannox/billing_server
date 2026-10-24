@@ -3,7 +3,7 @@ from sqlalchemy import select, or_
 from passlib.hash import bcrypt
 from app.entities import User, UserRole
 from sqlalchemy.exc import IntegrityError
-from fastapi import HTTPException
+from app.errors import BadRequest
 from app.projects.repository import get_all_projects
 from app.users.model import EmployeeStats, EmployeeProfile
 
@@ -19,7 +19,7 @@ class UserService:
         ).scalar_one_or_none()
 
         if exists:
-            raise HTTPException(status_code=400, detail="Phone already registered")
+            raise BadRequest("Phone already registered")
 
         # check email exists
         exists = db.execute(
@@ -27,7 +27,7 @@ class UserService:
         ).scalar_one_or_none()
 
         if exists:
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise BadRequest("Email already registered")
 
         hashed_password = bcrypt.hash(user.password)
 
@@ -47,7 +47,7 @@ class UserService:
 
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status_code=400, detail="Duplicate user data")
+            raise BadRequest("Duplicate user data")
 
         return new_user
 
@@ -137,14 +137,14 @@ class UserService:
                 select(User).where(User.phone == update_data["phone"])
             ).scalar_one_or_none()
             if exists:
-                raise HTTPException(status_code=400, detail="Phone already registered")
+                raise BadRequest("Phone already registered")
 
         if "email" in update_data and update_data["email"] != user.email:
             exists = db.execute(
                 select(User).where(User.email == update_data["email"])
             ).scalar_one_or_none()
             if exists:
-                raise HTTPException(status_code=400, detail="Email already registered")
+                raise BadRequest("Email already registered")
 
         for key, value in update_data.items():
             setattr(user, key, value)
@@ -154,7 +154,7 @@ class UserService:
             db.refresh(user)
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status_code=400, detail="Duplicate user data")
+            raise BadRequest("Duplicate user data")
 
         return user
 
@@ -175,6 +175,7 @@ class UserService:
             return None
 
         user.hashed_password = bcrypt.hash(new_password)
+        user.revoke_sessions()
         db.commit()
         db.refresh(user)
         return user

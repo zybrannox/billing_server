@@ -14,13 +14,14 @@ class Project(Base):
     # set it explicitly.
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     project_type = Column(String)
-    assigned_to = Column(String)
+    assigned_to = Column(String, index=True)
     priority = Column(String)
     client_status = Column(String)
     print_status = Column(
         String(20),
         default="In Progress",
-        nullable=False)
+        nullable=False,
+        index=True)
     start_date = Column(DateTime)
     delivery_date = Column(DateTime)
     description = Column(String, nullable=True)

@@ -7,9 +7,14 @@ from apscheduler.triggers.cron import CronTrigger
 from app.database import engine, Base, SessionLocal
 from sqlalchemy import select
 from passlib.hash import bcrypt
-from app.config import IS_PRODUCTION, ENABLE_API_DOCS
+from app.config import IS_PRODUCTION, ENABLE_API_DOCS, SKIP_SCHEMA_CHECK
+from app.database.schema import assert_schema_is_current
 from app.users import user_router
-from app.web_security import CsrfHeaderMiddleware, SecurityHeadersMiddleware
+from app.web_security import CacheInvalidationMiddleware, CsrfHeaderMiddleware, SecurityHeadersMiddleware
+from app.audit.controller import router as audit_router
+from app.system_health.controller import router as system_health_router
+from app.system_health.history import register_jobs as register_health_jobs
+from app.system_health.metrics import RequestMetricsMiddleware
 from app.document_settings import document_settings_router
 from app.projects import project_router
 from app.project_files import file_router
@@ -32,6 +37,9 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 import app.entities
+from app.monitoring import init_monitoring
+
+init_monitoring()
 
 
 # Interactive docs expose the full endpoint list - off in production unless
@@ -55,6 +63,9 @@ app.add_middleware(SlowAPIMiddleware)
 # still carries the CORS headers, and the browser shows the real 403 instead
 # of an opaque network error.
 app.add_middleware(CsrfHeaderMiddleware)
+
+# Drops cached dashboard data after any successful write (app/ttl_cache.py).
+app.add_middleware(CacheInvalidationMiddleware)
 
 # CORS setup
 app.add_middleware(
@@ -80,6 +91,10 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 # produced by the middleware above.
 app.add_middleware(SecurityHeadersMiddleware)
 
+# Outermost: times every request for the admin System Health screen (bounded
+# memory, never raises - see app/system_health/metrics.py).
+app.add_middleware(RequestMetricsMiddleware)
+
 # App startup event - DB check
 @app.on_event("startup")
 async def startup_db_check():
@@ -89,8 +104,15 @@ async def startup_db_check():
     # raise (rather than logging and returning) means a broken DB fails
     # startup loudly instead of the app finishing boot and serving every
     # subsequent request against a connection that was never established.
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database connected and tables created successfully!")
+    if IS_PRODUCTION:
+        # Migrations are the only thing that changes a production schema (see
+        # app/database/schema.py) - never create_all here.
+        if not SKIP_SCHEMA_CHECK:
+            assert_schema_is_current(engine)
+        print("✅ Database connected, schema is at the Alembic head.")
+    else:
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database connected and tables created successfully!")
 
     seed_default_admin()
     start_retention_scheduler()
@@ -126,6 +148,7 @@ def start_retention_scheduler():
         id="weekly_file_retention",
         replace_existing=True,
     )
+    register_health_jobs(retention_scheduler)
     retention_scheduler.start()
     print("🗓️  File retention scheduler started (weekly, Sun 03:00).")
 
@@ -181,6 +204,8 @@ def seed_default_admin():
     finally:
         db.close()
 
+app.include_router(audit_router)
+app.include_router(system_health_router)
 app.include_router(user_router)
 app.include_router(project_router)
 app.include_router(file_router)

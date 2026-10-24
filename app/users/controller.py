@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from app.errors import NotFound
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
+from app.audit import record_audit, label_of
+from app.entities import User
 from app.auth.dependencies import require_admin
 from app.users import UserCreate, UserRead, UserUpdate, UserPasswordUpdate
 from app.users import UserService
@@ -41,7 +44,7 @@ async def get_user(
     user = UserService.get_user_by_id(db, user_id)
 
     if not user:
-        raise HTTPException(404, "User not found")
+        raise NotFound("User")
 
     return user
 
@@ -58,7 +61,7 @@ async def get_employee_profile(
     profile = UserService.get_employee_profile(db, user_id)
 
     if not profile:
-        raise HTTPException(404, "User not found")
+        raise NotFound("User")
 
     return profile
 
@@ -73,7 +76,7 @@ async def update_user(
     updated = UserService.update_user(db, user_id, update)
 
     if not updated:
-        raise HTTPException(404, "User not found")
+        raise NotFound("User")
 
     return updated
 
@@ -84,12 +87,32 @@ async def delete_user(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
+    label = label_of(db, User, user_id, "username")
     success = UserService.delete_user(db, user_id)
 
     if not success:
-        raise HTTPException(404, "User not found")
+        raise NotFound("User")
+
+    record_audit(db, _admin["username"], "user.delete", "user", user_id, {"label": label})
 
     return {"detail": "User deleted successfully"}
+
+
+@router.post("/{user_id}/revoke-sessions")
+async def revoke_sessions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """"Sign out everywhere": every token already issued to this user stops
+    working; they sign in again with their password."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise NotFound("User")
+    user.revoke_sessions()
+    db.commit()
+    record_audit(db, _admin["username"], "user.revoke_sessions", "user", user_id, {"label": user.username})
+    return {"detail": "All sessions for this user were signed out."}
 
 
 @router.patch("/{user_id}/password")
@@ -102,6 +125,6 @@ async def change_password(
     updated = UserService.change_password(db, user_id, payload.new_password)
 
     if not updated:
-        raise HTTPException(404, "User not found")
+        raise NotFound("User")
 
     return {"detail": "Password updated successfully"}

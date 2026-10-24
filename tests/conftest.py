@@ -53,6 +53,9 @@ def fresh_database():
     from app.rate_limiting import limiter
 
     limiter.reset()
+    from app import ttl_cache
+
+    ttl_cache.clear()
     yield
 
 

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.audit import record_audit, label_of as _label_of
+from app.entities import Invoice
 from app.auth.dependencies import require_admin, get_current_user
 from .model import (
     InvoiceCreate,
@@ -95,7 +97,14 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db), _admin: dict = D
 
 @router.patch("/{invoice_id}", response_model=InvoiceRead)
 def update_invoice(invoice_id: int, payload: InvoiceUpdate, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
-    return service_update(db, invoice_id, payload, _admin["username"])
+    invoice = service_update(db, invoice_id, payload, _admin["username"])
+    changes = payload.model_dump(mode="json", exclude_unset=True)
+    cancelled = changes.get("status") == "cancelled"
+    record_audit(
+        db, _admin["username"], "invoice.cancel" if cancelled else "invoice.update", "invoice", invoice_id,
+        {"label": invoice.invoice_number, "changes": changes},
+    )
+    return invoice
 
 # Open to any authenticated user, unlike the generic update above - same
 # reasoning as create/preview/deliver: marking your own delivered work as
@@ -110,9 +119,14 @@ def mark_invoice_paid(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    return service_mark_paid(
+    invoice = service_mark_paid(
         db, invoice_id, payload.payment_method, payload.payment_reference, _user["username"]
     )
+    record_audit(
+        db, _user["username"], "invoice.mark_paid", "invoice", invoice_id,
+        {"label": invoice.invoice_number, "payment_method": payload.payment_method, "reference": payload.payment_reference},
+    )
+    return invoice
 
 @router.patch("/{invoice_id}/record-payment", response_model=InvoiceRead)
 def record_invoice_payment(
@@ -121,7 +135,7 @@ def record_invoice_payment(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    return service_record_payment(
+    invoice = service_record_payment(
         db,
         invoice_id,
         payload.amount,
@@ -129,7 +143,16 @@ def record_invoice_payment(
         payload.payment_reference,
         _user["username"],
     )
+    record_audit(
+        db, _user["username"], "invoice.payment", "invoice", invoice_id,
+        {"label": invoice.invoice_number, "amount": payload.amount, "payment_method": payload.payment_method,
+         "reference": payload.payment_reference},
+    )
+    return invoice
 
 @router.delete("/{invoice_id}")
 def delete_invoice(invoice_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
-    return service_delete(db, invoice_id)
+    label = _label_of(db, Invoice, invoice_id, "invoice_number")
+    result = service_delete(db, invoice_id)
+    record_audit(db, _admin["username"], "invoice.delete", "invoice", invoice_id, {"label": label})
+    return result

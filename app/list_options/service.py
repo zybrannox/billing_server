@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+from app.errors import NotFound
 
 from .repository import get_options, create_option, set_active
 from .model import ListOptionCreate
@@ -22,5 +23,5 @@ def service_create(db: Session, payload: ListOptionCreate):
 def service_set_active(db: Session, option_id: int, is_active: bool):
     option = set_active(db, option_id, is_active)
     if not option:
-        raise HTTPException(status_code=404, detail="Option not found")
+        raise NotFound("Option")
     return option

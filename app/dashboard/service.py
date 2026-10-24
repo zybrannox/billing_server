@@ -1,8 +1,8 @@
-from datetime import datetime
+from app.datetime_utils import utcnow
 
 from sqlalchemy.orm import Session
 
-from app.invoices.repository import get_latest_invoice_for_project
+from app.invoices.repository import get_latest_invoice_statuses
 
 from .repository import (
     get_attention_projects,
@@ -47,7 +47,7 @@ def service_get_summary(db: Session, granularity: str = "month") -> dict:
                 "priority": p.priority,
                 "print_status": p.print_status,
                 "delivery_date": p.delivery_date,
-                "is_overdue": bool(p.delivery_date and p.delivery_date < datetime.utcnow()),
+                "is_overdue": bool(p.delivery_date and p.delivery_date < utcnow()),
                 # A credit-delivered project can only have reached this
                 # list via the credit-unpaid branch of get_attention_
                 # projects (that branch requires delivered_at to be set,
@@ -64,8 +64,8 @@ def service_get_summary(db: Session, granularity: str = "month") -> dict:
 
 def _serialize_recent_deliveries(db: Session, projects) -> list[dict]:
     result = []
+    statuses = get_latest_invoice_statuses(db, [p.id for p in projects])
     for p in projects:
-        latest_invoice = get_latest_invoice_for_project(db, p.id)
         result.append(
             {
                 "id": p.id,
@@ -74,7 +74,7 @@ def _serialize_recent_deliveries(db: Session, projects) -> list[dict]:
                 "delivered_at": p.delivered_at,
                 "delivered_by": p.delivered_by,
                 "delivered_on_credit": p.delivered_on_credit,
-                "payment_status": latest_invoice.status if latest_invoice else None,
+                "payment_status": statuses.get(p.id),
             }
         )
     return result

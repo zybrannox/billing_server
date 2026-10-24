@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
+from app.errors import NotFound
 
 from app.entities import Customer, Company
 from app.projects import service as project_service
@@ -53,7 +53,7 @@ class PortalService:
         # 404, not 403 - an out-of-scope id shouldn't confirm to the caller
         # that it exists at all.
         if not PortalService._owns_project(client, project):
-            raise HTTPException(status_code=404, detail="Order not found")
+            raise NotFound("Order")
         return project
 
     @staticmethod
@@ -70,7 +70,7 @@ class PortalService:
     def get_invoice(db: Session, client: dict, invoice_id: int):
         invoice = get_invoice_raw(db, invoice_id)
         if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFound("Invoice")
 
         project = invoice.project
         owns = bool(project) and (
@@ -78,6 +78,6 @@ class PortalService:
             or (client["company_id"] and project.customer and project.customer.company_id == client["company_id"])
         )
         if not owns:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFound("Invoice")
 
         return invoice_service.service_get_details(db, invoice_id)

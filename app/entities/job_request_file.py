@@ -1,4 +1,4 @@
-from datetime import datetime
+from app.datetime_utils import utcnow
 
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from app.database import Base
@@ -27,4 +27,4 @@ class JobRequestFile(Base):
     height = Column(Float, nullable=True)
     pixel_width = Column(Integer, nullable=True)
     pixel_height = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)

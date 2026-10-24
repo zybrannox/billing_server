@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from app.config import IS_PRODUCTION, CLIENT_ACCESS_TOKEN_EXPIRE_MINUTES, COOKIE_SAMESITE

@@ -1,7 +1,8 @@
 from typing import Optional
 from datetime import datetime
+from app.datetime_utils import utcnow
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -37,7 +38,7 @@ class ClientAccount(Base):
     invited_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     invited_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     # Forgot-password verification code (see app/client_auth/service.py) -
     # separate from invite_token above: invite_token is for first-time
@@ -45,3 +46,15 @@ class ClientAccount(Base):
     # activated client who forgot their password.
     reset_code: Mapped[Optional[str]] = mapped_column(String(6), nullable=True)
     reset_code_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Server-side session revocation: tokens carry this number ("tv") and stop
+    # working the moment it changes (password change/reset, "sign out
+    # everywhere"). Bumped via the entity's revoke_sessions().
+    token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+    # Per-account brute-force lockout - see app/account_lockout.py.
+    failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    def revoke_sessions(self) -> None:
+        self.token_version = (self.token_version or 0) + 1

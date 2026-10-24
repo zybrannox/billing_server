@@ -1,6 +1,7 @@
-import math
+from app.pagination import page_count
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+from app.errors import NotFound
 from app.customers.billing import customer_bill_to
 from .calculations import compute_quotation_total
 from .repository import (
@@ -18,7 +19,7 @@ from .model import QuotationCreate, QuotationListResponse, QuotationConvertReque
 def service_create(db: Session, payload: QuotationCreate):
     customer = get_customer(db, payload.customer_id)
     if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
+        raise NotFound("Customer")
 
     subtotal = compute_quotation_total(payload.items)
 
@@ -39,7 +40,7 @@ def service_list(
     customer_id: int | None = None,
 ) -> QuotationListResponse:
     items, total = get_all_quotations(db, page=page, page_size=page_size, search=search, customer_id=customer_id)
-    total_pages = math.ceil(total / page_size) if page_size else 0
+    total_pages = page_count(total, page_size)
     return QuotationListResponse(
         items=items,
         total=total,
@@ -72,14 +73,14 @@ def _quotation_detail_dict(quotation, db: Session | None = None):
 def service_get_details(db: Session, quotation_id: int):
     quotation = get_quotation(db, quotation_id)
     if not quotation:
-        raise HTTPException(status_code=404, detail="Quotation not found")
+        raise NotFound("Quotation")
     return _quotation_detail_dict(quotation, db)
 
 
 def service_update_status(db: Session, quotation_id: int, status: str):
     quotation = get_quotation(db, quotation_id)
     if not quotation:
-        raise HTTPException(status_code=404, detail="Quotation not found")
+        raise NotFound("Quotation")
 
     if quotation.status != "pending":
         raise HTTPException(
@@ -94,7 +95,7 @@ def service_update_status(db: Session, quotation_id: int, status: str):
 def service_convert(db: Session, quotation_id: int, payload: QuotationConvertRequest, username: str):
     quotation = get_quotation(db, quotation_id)
     if not quotation:
-        raise HTTPException(status_code=404, detail="Quotation not found")
+        raise NotFound("Quotation")
 
     if quotation.status != "accepted":
         raise HTTPException(
@@ -108,5 +109,5 @@ def service_convert(db: Session, quotation_id: int, payload: QuotationConvertReq
 def service_delete(db: Session, quotation_id: int):
     success = delete_quotation(db, quotation_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Quotation not found")
+        raise NotFound("Quotation")
     return {"message": "Quotation deleted successfully"}

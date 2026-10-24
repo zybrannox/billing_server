@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Literal, Optional
 from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
+from app.response_model import ResponseModel
 from app.projects.model import Priority
 from app.invoices.model import MeasurementUnit
 
@@ -25,7 +26,7 @@ class QuotationItemCreate(BaseModel):
         return self
 
 
-class QuotationItemRead(BaseModel):
+class QuotationItemRead(ResponseModel):
     id: int
     description: Optional[str] = None
     width: float
@@ -78,7 +79,7 @@ class QuotationConvertRequest(BaseModel):
     delivery_date: UTCDateTime
 
 
-class CustomerSummary(BaseModel):
+class CustomerSummary(ResponseModel):
     first_name: str
     last_name: str
     contact_number: str
@@ -87,7 +88,7 @@ class CustomerSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class QuotationRead(BaseModel):
+class QuotationRead(ResponseModel):
     id: int
     quotation_number: str
     customer_id: int
@@ -95,7 +96,7 @@ class QuotationRead(BaseModel):
     subtotal: float
     discount_amount: float
     amount: float
-    status: str
+    status: Literal["pending", "accepted", "rejected", "converted"]
     valid_until: OptionalUTCDateTime = None
     created_at: UTCDateTime
     converted_project_id: Optional[int] = None
@@ -110,7 +111,7 @@ class QuotationDetailRead(QuotationRead):
     items: List[QuotationItemRead] = []
 
 
-class QuotationListResponse(BaseModel):
+class QuotationListResponse(ResponseModel):
     items: List[QuotationRead]
     total: int
     page: int

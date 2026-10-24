@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from app.datetime_utils import utcnow
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -42,7 +43,7 @@ def get_stats(db: Session) -> dict:
         or 0.0
     )
 
-    now = datetime.utcnow()
+    now = utcnow()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     # paid_at (when the money actually came in), not created_at (when the
     # invoice was raised) - an invoice created last month but only marked
@@ -126,7 +127,7 @@ def get_revenue_trend(db: Session, granularity: str = "month") -> list[dict]:
     periods = _TREND_PERIODS.get(granularity, _TREND_PERIODS["month"])
     key_fmt = _TREND_KEY_FORMAT.get(granularity, _TREND_KEY_FORMAT["month"])
     label_fmt = _TREND_LABEL_FORMAT.get(granularity, _TREND_LABEL_FORMAT["month"])
-    now = datetime.utcnow()
+    now = utcnow()
 
     if granularity == "day":
         start = (now - timedelta(days=periods - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -203,7 +204,7 @@ def get_attention_projects(db: Session, limit: int = 8):
          the goods are gone there's no more leverage to get paid, so those
          are the most time-sensitive entries here.
     """
-    now = datetime.utcnow()
+    now = utcnow()
     not_yet_delivered = and_(
         Project.delivered_at.is_(None),
         (Project.priority == "Urgent") | (Project.delivery_date < now),

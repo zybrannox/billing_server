@@ -1,5 +1,6 @@
 import secrets
 from datetime import datetime, timedelta
+from app.datetime_utils import utcnow
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -31,7 +32,7 @@ def get_by_token(db: Session, token: str) -> SharedDocument | None:
 
 
 def _new_expiry() -> datetime:
-    return datetime.utcnow() + timedelta(days=SHARE_LINK_EXPIRY_DAYS)
+    return utcnow() + timedelta(days=SHARE_LINK_EXPIRY_DAYS)
 
 
 def get_active_by_token(db: Session, token: str) -> SharedDocument | None:
@@ -41,7 +42,7 @@ def get_active_by_token(db: Session, token: str) -> SharedDocument | None:
     doc = get_by_token(db, token)
     if doc is None or doc.revoked_at is not None:
         return None
-    if doc.expires_at is not None and doc.expires_at <= datetime.utcnow():
+    if doc.expires_at is not None and doc.expires_at <= utcnow():
         return None
     return doc
 
@@ -54,7 +55,7 @@ def revoke(db: Session, document_type: str, document_id: int) -> bool:
     if doc is None:
         return False
     (UPLOAD_DIR / doc.filename).unlink(missing_ok=True)
-    doc.revoked_at = datetime.utcnow()
+    doc.revoked_at = utcnow()
     db.commit()
     return True
 

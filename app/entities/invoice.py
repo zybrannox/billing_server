@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.datetime_utils import utcnow
 from typing import Optional
 from sqlalchemy import String, Integer, Float, DateTime, ForeignKey, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -14,7 +15,7 @@ class Invoice(Base):
     __tablename__ = "invoices_v1"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
     invoice_number: Mapped[Optional[str]] = mapped_column(String(50), unique=True, index=True, nullable=True)
     # `subtotal` is the raw sum of line items; `amount` is what's actually
     # owed after `discount_amount` is taken off (subtotal - discount) -
@@ -24,8 +25,8 @@ class Invoice(Base):
     subtotal: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     discount_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="pending")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     due_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     # Advance payment - recorded manually by an admin (no payment gateway
     # involved), typically taken upfront before work starts. 0 = none

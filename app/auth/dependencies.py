@@ -26,6 +26,10 @@ def get_current_user(access_token: str = Cookie(None), db: Session = Depends(get
     ).scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User no longer exists or is inactive")
+    # Revoked (password changed/reset, "sign out everywhere"). Tokens issued
+    # before this claim existed count as version 0.
+    if payload.get("tv", 0) != (user.token_version or 0):
+        raise HTTPException(status_code=401, detail="Session has been signed out")
 
     return {"username": user.username, "role": user.role.value}
 
