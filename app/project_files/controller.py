@@ -17,11 +17,13 @@ from app.project_files.model import (
     InitChunkedUploadRequest,
     InitChunkedUploadResponse,
     CompleteChunkedUploadRequest,
+    ProjectFileRead,
 )
 from app.project_files.utils import generate_thumbnail
 from app.project_files import chunked
 from app.project_files.retention import purge_stale_originals
-from app.entities import ProjectFile
+from app.entities import Invoice, ProjectFile
+from app.project_files.invoice_files import invoiced_files
 from typing import List
 from pathlib import Path
 from fastapi import Request
@@ -303,6 +305,38 @@ def attach_files(project_id: int, payload: AttachFilesRequest, db: Session = Dep
         db.add(ProjectFile(project_id=project.id, **entry))
     db.commit()
     return {"message": "attached", "file_paths": entries}
+
+
+def _gallery_entries(files):
+    entries = []
+    for f in files:
+        path = UPLOAD_DIR / f.path
+        exists = path.is_file()
+        media_type = mimetypes.guess_type(f.path)[0] or ""
+        entries.append(
+            {
+                "path": f.path,
+                "original_name": f.original_name,
+                "is_image": media_type.startswith("image/"),
+                "original_available": exists and f.original_deleted_at is None,
+                "size_bytes": path.stat().st_size if exists else None,
+                "pixel_width": f.pixel_width,
+                "pixel_height": f.pixel_height,
+                "created_at": f.created_at,
+            }
+        )
+    return entries
+
+
+@router.get("/invoice/{invoice_id}", response_model=List[ProjectFileRead])
+def list_invoice_files(invoice_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """The files an invoice actually billed for (not everything the project
+    holds), with what the gallery needs to choose between the full-size
+    original and the thumbnail. See app/project_files/invoice_files.py."""
+    invoice = db.get(Invoice, invoice_id)
+    if invoice is None:
+        raise NotFound("Invoice")
+    return _gallery_entries(invoiced_files(db, invoice))
 
 
 @router.get("/thumbnail/{filename}")

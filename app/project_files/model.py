@@ -1,6 +1,9 @@
 from pydantic import BaseModel
 from typing import Optional, List
 
+from app.datetime_utils import UTCDateTime
+from app.response_model import ResponseModel
+
 
 class AttachFileEntry(BaseModel):
     path: str
@@ -43,3 +46,18 @@ class CompleteChunkedUploadRequest(BaseModel):
     height: Optional[float] = None
     pixel_width: Optional[int] = None
     pixel_height: Optional[int] = None
+
+
+class ProjectFileRead(ResponseModel):
+    """One file of a project, as the gallery needs it."""
+
+    path: str
+    original_name: Optional[str]
+    is_image: bool
+    # True while the full-size original is still on disk. The weekly retention
+    # job removes originals of finished projects; the thumbnail stays.
+    original_available: bool
+    size_bytes: Optional[int]
+    pixel_width: Optional[int]
+    pixel_height: Optional[int]
+    created_at: UTCDateTime

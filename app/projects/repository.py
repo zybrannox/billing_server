@@ -1,6 +1,6 @@
 from datetime import timedelta
 from app.datetime_utils import utcnow
-from sqlalchemy import case, or_
+from sqlalchemy import and_, case, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.entities.project import Project
 from app.entities.customer import Customer
@@ -31,13 +31,23 @@ def get_project(db: Session, project_id: int):
 
 # Default table order: Pending -> In Progress -> Completed, and within each
 # status Urgent -> High -> Normal -> Low (Low always sorts last within its
-# status group rather than being hidden).
+# status group rather than being hidden). Completed jobs are the exception:
+# awaiting-delivery first, then delivered newest first (see _COMPLETED_DELIVERED).
 _PRINT_STATUS_RANK = case(
     (Project.print_status == "Pending", 1),
     (Project.print_status == "In Progress", 2),
     (Project.print_status == "Completed", 3),
     else_=4,
 )
+# Within the Completed group, jobs still waiting to be delivered come first
+# (soonest scheduled delivery first - the most overdue on top), and jobs that
+# have been delivered drop below them, most recent delivery first. Each key is
+# NULL (or constant) for every other status, so Pending / In Progress ordering
+# is untouched.
+_COMPLETED = Project.print_status == "Completed"
+_COMPLETED_DELIVERED = case((and_(_COMPLETED, Project.delivered_at.isnot(None)), 1), else_=0)
+_AWAITING_DELIVERY_DUE = case((and_(_COMPLETED, Project.delivered_at.is_(None)), Project.delivery_date), else_=None)
+_COMPLETED_DELIVERED_AT = case((_COMPLETED, Project.delivered_at), else_=None)
 _PRIORITY_RANK = case(
     (Project.priority == "Urgent", 1),
     (Project.priority == "High", 2),
@@ -139,7 +149,15 @@ def get_all_projects(
         # status/priority ordering - a real sort key (not a client-side
         # reorder-after-fetch), so it stays correct across pages instead of
         # only pinning-to-the-top-of-whatever-page-you're-on.
-        query.order_by(Project.pinned.desc(), _PRINT_STATUS_RANK, _PRIORITY_RANK, Project.id.desc())
+        query.order_by(
+            Project.pinned.desc(),
+            _PRINT_STATUS_RANK,
+            _COMPLETED_DELIVERED,
+            _AWAITING_DELIVERY_DUE.asc().nulls_last(),
+            _COMPLETED_DELIVERED_AT.desc().nulls_last(),
+            _PRIORITY_RANK,
+            Project.id.desc(),
+        )
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

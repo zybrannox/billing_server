@@ -42,6 +42,9 @@ class InvoiceItemCreate(BaseModel):
     # still required and still drives the stored total either way; this
     # only controls whether the invoice view shows it.
     is_manual_total: bool = False
+    # The uploaded file this line bills for (a ProjectFile id) - optional;
+    # see InvoiceItem.project_file_id.
+    project_file_id: Optional[int] = None
 
     @model_validator(mode="after")
     def dimensions_required_when_measured(self):
@@ -63,6 +66,7 @@ class InvoiceItemRead(ResponseModel):
     total: float
     is_manual_total: bool
     sort_order: int
+    project_file_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -209,6 +213,7 @@ class InvoiceRead(ResponseModel):
 
 
 class ProjectFileSummary(ResponseModel):
+    id: int
     original_name: Optional[str] = None
     # width/height: a physical-size *estimate* in inches, derived client-side
     # from an assumed 96 DPI (see getImageDimensions in the frontend) - not

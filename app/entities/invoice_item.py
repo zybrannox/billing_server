@@ -53,5 +53,13 @@ class InvoiceItem(Base):
     # actually entered.
     is_manual_total: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # The uploaded design file this line was billed for, when the line came
+    # from one (the invoice screen starts a line per file). Lets the invoice's
+    # file gallery show exactly the files that were invoiced, nothing else the
+    # project happens to hold. Null for lines typed by hand and for invoices
+    # raised before this link existed (see app/project_files/invoice_files.py).
+    project_file_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("project_files.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     invoice = relationship("Invoice", back_populates="items")

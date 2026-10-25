@@ -2465,6 +2465,17 @@
             "title": "Pieces",
             "type": "integer"
           },
+          "project_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project File Id"
+          },
           "rate": {
             "minimum": 0.0,
             "title": "Rate",
@@ -2526,6 +2537,17 @@
             "title": "Pieces",
             "type": "integer"
           },
+          "project_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project File Id"
+          },
           "rate": {
             "title": "Rate",
             "type": "number"
@@ -2567,7 +2589,8 @@
           "pieces",
           "total",
           "is_manual_total",
-          "sort_order"
+          "sort_order",
+          "project_file_id"
         ],
         "title": "InvoiceItemRead",
         "type": "object"
@@ -3725,6 +3748,83 @@
         "title": "ProjectCreate",
         "type": "object"
       },
+      "ProjectFileRead": {
+        "description": "One file of a project, as the gallery needs it.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "is_image": {
+            "title": "Is Image",
+            "type": "boolean"
+          },
+          "original_available": {
+            "title": "Original Available",
+            "type": "boolean"
+          },
+          "original_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Name"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "pixel_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pixel Height"
+          },
+          "pixel_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pixel Width"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          }
+        },
+        "required": [
+          "path",
+          "original_name",
+          "is_image",
+          "original_available",
+          "size_bytes",
+          "pixel_width",
+          "pixel_height",
+          "created_at"
+        ],
+        "title": "ProjectFileRead",
+        "type": "object"
+      },
       "ProjectFileSummary": {
         "properties": {
           "height": {
@@ -3737,6 +3837,10 @@
               }
             ],
             "title": "Height"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
           },
           "original_name": {
             "anyOf": [
@@ -3784,6 +3888,7 @@
           }
         },
         "required": [
+          "id",
           "original_name",
           "width",
           "height",
@@ -7451,6 +7556,62 @@
           }
         },
         "summary": "Download File",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/files/invoice/{invoice_id}": {
+      "get": {
+        "description": "The files an invoice actually billed for (not everything the project\nholds), with what the gallery needs to choose between the full-size\noriginal and the thumbnail. See app/project_files/invoice_files.py.",
+        "operationId": "list_invoice_files_files_invoice__invoice_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "title": "Invoice Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectFileRead"
+                  },
+                  "title": "Response List Invoice Files Files Invoice  Invoice Id  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Invoice Files",
         "tags": [
           "Files"
         ]

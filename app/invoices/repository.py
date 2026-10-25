@@ -7,6 +7,7 @@ from app.entities.invoice import Invoice
 from app.entities.invoice_item import InvoiceItem
 from app.entities.invoice_payment import InvoicePayment
 from app.entities.project import Project
+from app.entities.project_file import ProjectFile
 from app.entities.customer import Customer
 from app.entities.company import Company
 from .calculations import compute_line
@@ -38,6 +39,20 @@ def get_project_with_customer(db: Session, project_id: int):
         else None
     )
     return project, customer
+
+
+def _valid_file_id(db: Session, project_id: int, file_id: int | None) -> int | None:
+    """A line may only point at a file that belongs to the invoice's own
+    project; anything else (stale id, another project's file) is dropped
+    rather than linked."""
+    if file_id is None:
+        return None
+    owned = (
+        db.query(ProjectFile.id)
+        .filter(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
+        .first()
+    )
+    return file_id if owned else None
 
 
 def create_invoice(db: Session, payload: InvoiceCreate, username: str):
@@ -141,6 +156,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
                     total=line_total,
                     is_manual_total=item.is_manual_total,
                     sort_order=idx,
+                    project_file_id=_valid_file_id(db, project_id, item.project_file_id),
                 )
             )
 
@@ -334,6 +350,7 @@ def update_invoice(db: Session, invoice_id: int, invoice: InvoiceUpdate, usernam
                     total=total,
                     is_manual_total=item.get("is_manual_total", False),
                     sort_order=idx,
+                    project_file_id=_valid_file_id(db, db_invoice.project_id, item.get("project_file_id")),
                 )
             )
         db_invoice.items = new_items
