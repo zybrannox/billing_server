@@ -36,6 +36,7 @@ class CustomerRead(CustomerBase):
     # None rather than paying for the extra query.
     payment_status: Optional[Literal["paid", "pending", "no_invoices"]] = None
     outstanding_balance: Optional[float] = None
+    invoice_count: Optional[int] = None
 
     model_config = {
         "from_attributes": True

@@ -86,7 +86,8 @@ class InvoiceItemRead(ResponseModel):
 # invoice off of, not to be scheduled or assigned like ordinary work
 # coming through Projects.
 class InvoiceNewProject(BaseModel):
-    project_type: str
+    # Optional: not every one-off invoice needs a job type (see create_invoice).
+    project_type: Optional[str] = None
     customer_id: int
 
 
@@ -96,6 +97,8 @@ class InvoiceCreate(BaseModel):
     # new_project to raise the invoice and create that Project together.
     project_id: Optional[int] = None
     new_project: Optional[InvoiceNewProject] = None
+    # The note this invoice was raised from, linked in the same transaction.
+    note_id: Optional[int] = None
     due_date: OptionalUTCDateTime = None
     # `amount` is deliberately not accepted here - it's derived server-side
     # from `items` (see create_invoice) so a client can never hand the API
@@ -296,3 +299,26 @@ class InvoiceListResponse(ResponseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# The views of the invoice list. "unpaid" is everything still owed, whether or
+# not it's late; "overdue" is the part of that past its due date.
+InvoiceView = Literal["unpaid", "overdue", "paid", "cancelled"]
+
+
+class InvoiceViewCounts(ResponseModel):
+    all: int
+    unpaid: int
+    overdue: int
+    paid: int
+    cancelled: int
+
+
+# What's owed at a glance, above the invoice list. Amounts are balances due, so
+# money already taken as an advance isn't counted as still outstanding.
+class InvoiceSummary(ResponseModel):
+    total_outstanding: float
+    due_today: float
+    due_within_30_days: float
+    overdue: float
+    counts: InvoiceViewCounts

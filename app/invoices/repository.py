@@ -1,7 +1,7 @@
 from app.pagination import paginate
 from datetime import timedelta
 from app.datetime_utils import utcnow
-from sqlalchemy import case
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session, joinedload
 from app.entities.invoice import Invoice
 from app.entities.invoice_item import InvoiceItem
@@ -10,6 +10,8 @@ from app.entities.project import Project
 from app.entities.project_file import ProjectFile
 from app.entities.customer import Customer
 from app.entities.company import Company
+from app.entities.note import Note
+from app.bin.service import BinEntry, move_to_bin
 from .calculations import compute_line
 from .model import InvoiceCreate, InvoiceUpdate
 
@@ -55,6 +57,9 @@ def _valid_file_id(db: Session, project_id: int, file_id: int | None) -> int | N
     return file_id if owned else None
 
 
+DEFAULT_JOB_TYPE = "General"
+
+
 def create_invoice(db: Session, payload: InvoiceCreate, username: str):
     try:
         # `new_project` (see InvoiceNewProject) means this invoice is being
@@ -67,7 +72,8 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
         if payload.new_project:
             now = utcnow()
             new_project = Project(
-                project_type=payload.new_project.project_type,
+                # Everywhere that lists projects expects one to have a type.
+                project_type=(payload.new_project.project_type or "").strip() or DEFAULT_JOB_TYPE,
                 customer_id=payload.new_project.customer_id,
                 # Not asked for on the invoice screen (see InvoiceNewProject)
                 # - this project exists purely to hang the invoice off of,
@@ -170,6 +176,11 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
         year = (new_invoice.created_at or utcnow()).year
         new_invoice.invoice_number = f"INV-{year}-{new_invoice.id:05d}"
 
+        if payload.note_id:
+            note = db.get(Note, payload.note_id)
+            if note:
+                note.invoice_id = new_invoice.id
+
         db.commit()
         db.refresh(new_invoice)
         return new_invoice
@@ -231,6 +242,7 @@ def get_all_invoices(
     search: str | None = None,
     customer_id: int | None = None,
     company_id: int | None = None,
+    view: str | None = None,
 ):
     # Previously returned every invoice ever created, unpaginated - fine
     # with a handful of rows, but the response only grows over time (unlike
@@ -255,18 +267,23 @@ def get_all_invoices(
             Customer, Project.customer_id == Customer.id
         )
 
-    if search:
+    if search and search.strip():
         # Matches on the invoice number itself, or who/what it's for -
         # exactly the three things admins actually scan the list for (see
         # conversation: "hard to track who's invoice it is and for which
-        # project it is").
-        like = f"%{search}%"
+        # project it is"). The phone number is what a customer calling in
+        # gives you, and a full name has to match across both name columns.
+        # autoescape: a typed "%" or "_" means that character, not "anything".
+        term = search.strip()
         query = query.filter(
-            Invoice.invoice_number.ilike(like)
-            | Project.project_type.ilike(like)
-            | Customer.first_name.ilike(like)
-            | Customer.last_name.ilike(like)
+            Invoice.invoice_number.icontains(term, autoescape=True)
+            | Project.project_type.icontains(term, autoescape=True)
+            | (Customer.first_name + " " + Customer.last_name).icontains(term, autoescape=True)
+            | Customer.contact_number.icontains(term, autoescape=True)
         )
+
+    if view:
+        query = query.filter(*_view_filter(view))
 
     if customer_id:
         query = query.filter(Project.customer_id == customer_id)
@@ -282,6 +299,55 @@ def get_all_invoices(
     total = query.count()
     items = paginate(query, page, page_size).all()
     return items, total
+
+def _view_filter(view: str) -> list:
+    if view == "unpaid":
+        return [Invoice.status == "pending"]
+    if view == "overdue":
+        return [Invoice.status == "pending", Invoice.due_date.isnot(None), Invoice.due_date < utcnow()]
+    return [Invoice.status == view]
+
+
+def get_invoice_summary(db: Session, tz_offset_minutes: int = 330) -> dict:
+    now = utcnow()
+    # "Today" ends at midnight where the shop is, not at midnight UTC.
+    offset = timedelta(minutes=tz_offset_minutes)
+    local_now = now + offset
+    end_of_today = local_now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1) - offset
+
+    advance = func.coalesce(Invoice.advance_amount, 0)
+    balance = case((Invoice.amount > advance, Invoice.amount - advance), else_=0)
+
+    pending = Invoice.status == "pending"
+    overdue = and_(*_view_filter("overdue"))
+    upcoming = and_(pending, Invoice.due_date.isnot(None), Invoice.due_date >= now)
+
+    def owed(condition):
+        return func.coalesce(func.sum(case((condition, balance), else_=0)), 0)
+
+    def count(condition):
+        return func.coalesce(func.sum(case((condition, 1), else_=0)), 0)
+
+    # One pass over the table rather than a query per figure.
+    row = db.query(
+        owed(pending),
+        owed(and_(upcoming, Invoice.due_date < end_of_today)),
+        owed(and_(upcoming, Invoice.due_date < now + timedelta(days=30))),
+        owed(overdue),
+        func.count(Invoice.id),
+        count(pending),
+        count(overdue),
+        count(Invoice.status == "paid"),
+        count(Invoice.status == "cancelled"),
+    ).one()
+    return {
+        "total_outstanding": round(row[0], 2),
+        "due_today": round(row[1], 2),
+        "due_within_30_days": round(row[2], 2),
+        "overdue": round(row[3], 2),
+        "counts": {"all": row[4], "unpaid": row[5], "overdue": row[6], "paid": row[7], "cancelled": row[8]},
+    }
+
 
 def get_invoice_payments(db: Session, invoice_id: int):
     return (
@@ -359,10 +425,14 @@ def update_invoice(db: Session, invoice_id: int, invoice: InvoiceUpdate, usernam
     db.refresh(db_invoice)
     return db_invoice
 
-def delete_invoice(db: Session, invoice_id: int):
+def delete_invoice(db: Session, invoice_id: int, deleted_by: str):
     db_invoice = get_invoice(db, invoice_id)
     if not db_invoice:
         return False
-    db.delete(db_invoice)
-    db.commit()
+    move_to_bin(
+        db,
+        [BinEntry("invoice", db_invoice, db_invoice.invoice_number or f"Invoice #{invoice_id}", db_invoice.customer_name)],
+        deleted_by,
+        "This invoice came from a quotation, so it can't be deleted.",
+    )
     return True

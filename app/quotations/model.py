@@ -73,7 +73,7 @@ class QuotationStatusUpdate(BaseModel):
 # already lives on the quotation and carries straight over.
 class QuotationConvertRequest(BaseModel):
     assigned_to: str
-    priority: Priority
+    priority: Priority = "Normal"
     client_status: str
     start_date: UTCDateTime
     delivery_date: UTCDateTime

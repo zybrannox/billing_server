@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.audit import record_audit, label_of
+from app.audit import record_audit
+from app.auth.permissions import INVOICE_CREATE, require_permission
 from app.entities import Quotation
 from app.auth.dependencies import require_admin, get_current_user
 from app.invoices.model import InvoiceRead
@@ -60,10 +61,16 @@ def update_status(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
+    existing = db.get(Quotation, quotation_id)
+    before = existing.status if existing else None
     quotation = service_update_status(db, quotation_id, payload.status)
     record_audit(
         db, _user["username"], f"quotation.{payload.status}", "quotation", quotation_id,
-        {"label": quotation.quotation_number},
+        {
+            # service_update_status returns the response dict, not the row.
+            "label": quotation["quotation_number"],
+            "changes": [{"field": "status", "label": "Status", "from": before, "to": quotation["status"]}],
+        },
     )
     return quotation
 
@@ -73,14 +80,11 @@ def convert_to_invoice(
     quotation_id: int,
     payload: QuotationConvertRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission(INVOICE_CREATE)),
 ):
     return service_convert(db, quotation_id, payload, current_user["username"])
 
 
 @router.delete("/{quotation_id}")
 def delete_quotation(quotation_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
-    label = label_of(db, Quotation, quotation_id, "quotation_number")
-    result = service_delete(db, quotation_id)
-    record_audit(db, _admin["username"], "quotation.delete", "quotation", quotation_id, {"label": label})
-    return result
+    return service_delete(db, quotation_id, _admin["username"])

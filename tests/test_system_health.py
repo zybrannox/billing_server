@@ -1,6 +1,8 @@
 import os
 import time
 
+import re
+
 import pytest
 from passlib.hash import bcrypt
 
@@ -60,6 +62,9 @@ def test_the_health_endpoint_does_not_count_itself_in_latency_stats(client, db):
 
     admin = _user(db, "boss", UserRole.ADMIN)
     client.cookies.set("access_token", create_access_token({"sub": admin.username, "role": "admin", "tv": 0}))
+    # Counters are process-wide, and slowest_routes only keeps the top few, so
+    # whatever other tests happened to call shouldn't decide this one.
+    request_metrics.__init__()
     before = request_metrics.summary(minutes=1)["requests"]
     client.get("/system-health")
     client.get("/auth/me")
@@ -124,7 +129,7 @@ def test_swap_and_low_memory_names_the_biggest_consumer():
 
 
 @pytest.mark.parametrize("machine,expected", [
-    ({"load_per_core": 2.5}, "CPU is overloaded"),
+    ({"load_per_core": 2.5}, "server is overloaded"),
     ({"disk_free_pct": 3, "disk_free_gb": 8}, "disk is almost full"),
     ({"disk_free_pct": 8, "disk_free_gb": 20}, "disk is filling up"),
 ])
@@ -135,20 +140,20 @@ def test_cpu_and_disk_rules(machine, expected):
 def test_slow_requests_on_a_healthy_machine_point_at_the_database():
     slow = [{"at": None, "ms": 2400, "statement": "SELECT ..."}]
     result = _diagnose(performance={"requests": 50, "p95_ms": 1600, "errors": 0}, slow=slow)
-    assert "machine is fine" in result["findings"][0]["title"] and "2400" in result["findings"][0]["detail"]
+    assert "server is fine" in result["findings"][0]["title"] and "2.4 seconds" in result["findings"][0]["detail"]
 
 
 def test_slow_requests_during_a_resource_problem_blame_the_resource_first():
     result = _diagnose({"memory_available_pct": 3, "swap_used_mb": 4000},
                        performance={"requests": 50, "p95_ms": 3200, "errors": 0})
     assert result["findings"][0]["severity"] == "critical"
-    assert any(f["severity"] == "info" and "consistent" in f["detail"] for f in result["findings"])
+    assert any(f["severity"] == "info" and "problem above" in f["detail"] for f in result["findings"])
 
 
 def test_pool_exhaustion_and_error_rate_are_flagged():
     result = _diagnose(pool={"size": 20, "in_use": 18}, performance={"requests": 100, "errors": 9, "p95_ms": 50})
     titles = " ".join(f["title"] for f in result["findings"])
-    assert "database connections" in titles and "failing" in titles
+    assert "a lot of requests" in titles and "failing" in titles
 
 
 # ---- storage and history ----------------------------------------------------
@@ -196,3 +201,17 @@ def test_history_snapshots_are_stored_purged_and_downsampled(db, monkeypatch):
                             app_memory_mb=0, requests=0, errors=0))
     db.commit()
     assert len(history.history(db, minutes=60)) <= 120
+
+
+def test_warnings_are_written_without_technical_words():
+    processes = {"components": [], "other_top": [{"name": "Google Chrome", "memory_mb": 3200, "memory_pct": 40}]}
+    result = _diagnose(
+        {"memory_available_pct": 4, "swap_used_mb": 3000, "load_per_core": 2.5, "disk_free_pct": 3, "disk_free_gb": 8},
+        processes,
+        pool={"size": 20, "in_use": 18},
+        performance={"requests": 100, "errors": 9, "p95_ms": 4000},
+    )
+    text = " ".join(f"{f['title']} {f['detail']} {f['action']}" for f in result["findings"])
+    assert len(result["findings"]) >= 5
+    for word in ("swap", "RAM", "CPU", "DB_POOL", "per core", "Sentry", "query", "queries", "backend", "process"):
+        assert not re.search(rf"\b{word}\b", text, re.IGNORECASE), word

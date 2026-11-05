@@ -1,8 +1,10 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy import select, or_, func
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from app.errors import BadRequest
+from app.bin.service import BinEntry, move_to_bin
 from app.entities import Customer, Project, Invoice
 from app.projects.repository import get_all_projects
 from app.invoices.repository import get_all_invoices
@@ -136,7 +138,16 @@ class CustomerService:
             .all()
         }
 
+        invoice_counts = dict(
+            db.query(Project.customer_id, func.count(Invoice.id))
+            .join(Invoice, Invoice.project_id == Project.id)
+            .filter(Project.customer_id.in_(ids))
+            .group_by(Project.customer_id)
+            .all()
+        )
+
         for customer in customers:
+            customer.invoice_count = invoice_counts.get(customer.id, 0)
             outstanding = round(outstanding_by_customer.get(customer.id, 0.0), 2)
             customer.outstanding_balance = outstanding
             if outstanding > 0:
@@ -234,22 +245,15 @@ class CustomerService:
         return customer
 
     @staticmethod
-    def delete_customer(db: Session, customer_id: int) -> bool:
+    def delete_customer(db: Session, customer_id: int, deleted_by: str) -> bool:
         customer = db.get(Customer, customer_id)
         if not customer:
             return False
-        db.delete(customer)
-        try:
-            db.commit()
-        except IntegrityError:
-            # Project.customer_id and Quotation.customer_id are FKs with no
-            # ondelete clause (unlike Customer.company_id, which explicitly
-            # SET NULLs - see entities/customer.py) - deleting a customer
-            # who still has any project/invoice/quotation on file violates
-            # that FK and would otherwise surface as a raw, unhandled 500.
-            db.rollback()
-            raise HTTPException(
-                status_code=400,
-                detail="This customer still has projects or invoices on file and can't be deleted.",
-            )
+        label = f"{customer.first_name} {customer.last_name}".strip()
+        move_to_bin(
+            db,
+            [BinEntry("customer", customer, label, customer.email or customer.contact_number)],
+            deleted_by,
+            "This customer still has projects or invoices on file and can't be deleted.",
+        )
         return True

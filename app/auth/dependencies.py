@@ -4,7 +4,16 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.config import SECRET_KEY, ALGORITHM
 from app.database import get_db
-from app.entities import User
+from app.entities import User, UserRole
+
+def _permissions_of(user: User) -> list[str]:
+    # Local import: permissions.py builds on this module's get_current_user.
+    from .permissions import ALL_PERMISSIONS
+
+    if user.role == UserRole.ADMIN:
+        return list(ALL_PERMISSIONS)
+    return [p for p in ALL_PERMISSIONS if p in (user.permissions or [])]
+
 
 def get_current_user(access_token: str = Cookie(None), db: Session = Depends(get_db)):
     if not access_token:
@@ -26,12 +35,20 @@ def get_current_user(access_token: str = Cookie(None), db: Session = Depends(get
     ).scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User no longer exists or is inactive")
+    # A username can be edited and later reused by someone else, so the name
+    # alone doesn't prove this is the same person - without this, a session
+    # still open under the old name would silently become the new owner's
+    # account. Tokens issued before this claim existed simply don't have it.
+    if payload.get("uid", user.id) != user.id:
+        raise HTTPException(status_code=401, detail="Session has been signed out")
     # Revoked (password changed/reset, "sign out everywhere"). Tokens issued
     # before this claim existed count as version 0.
     if payload.get("tv", 0) != (user.token_version or 0):
         raise HTTPException(status_code=401, detail="Session has been signed out")
 
-    return {"username": user.username, "role": user.role.value}
+    # Who the activity log credits for what this request changes (app/audit/tracker.py).
+    db.info["actor"] = user.username
+    return {"username": user.username, "role": user.role.value, "permissions": _permissions_of(user)}
 
 
 def require_admin(current_user: dict = Depends(get_current_user)) -> dict:

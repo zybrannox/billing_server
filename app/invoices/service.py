@@ -1,3 +1,4 @@
+from app.entities.note import Note
 from app.pagination import page_count
 from app.datetime_utils import utcnow
 from sqlalchemy.orm import Session
@@ -21,6 +22,14 @@ from typing import Optional
 from .model import InvoiceCreate, InvoiceUpdate, InvoiceListResponse
 
 def service_create(db: Session, payload: InvoiceCreate, username: str):
+    if payload.note_id:
+        note = db.get(Note, payload.note_id)
+        if not note:
+            raise NotFound("Note")
+        # A double-click or a stale page mustn't bill the same job twice.
+        if note.invoice_id:
+            raise HTTPException(status_code=400, detail="This note has already been turned into an invoice.")
+
     if payload.project_id:
         # FK alone would turn a bad project_id into a raw 500 (constraint
         # violation) - check up front so a stale/mistyped project id in the
@@ -79,9 +88,10 @@ def service_list(
     search: str | None = None,
     customer_id: int | None = None,
     company_id: int | None = None,
+    view: str | None = None,
 ) -> InvoiceListResponse:
     items, total = get_all_invoices(
-        db, page=page, page_size=page_size, search=search, customer_id=customer_id, company_id=company_id
+        db, page=page, page_size=page_size, search=search, customer_id=customer_id, company_id=company_id, view=view
     )
     total_pages = page_count(total, page_size)
     return InvoiceListResponse(
@@ -382,8 +392,8 @@ def service_get_payments(db: Session, invoice_id: int):
     return get_invoice_payments(db, invoice_id)
 
 
-def service_delete(db: Session, invoice_id: int):
-    success = delete_invoice(db, invoice_id)
+def service_delete(db: Session, invoice_id: int, deleted_by: str):
+    success = delete_invoice(db, invoice_id, deleted_by)
     if not success:
         raise NotFound("Invoice")
-    return {"message": "Invoice deleted successfully"}
+    return {"message": "Invoice moved to the bin"}

@@ -33,7 +33,7 @@ def staff(db):
 
 def test_staff_token_round_trips(db, staff):
     token = create_access_token({"sub": "alan"})
-    assert get_current_user(access_token=token, db=db) == {"username": "alan", "role": "user"}
+    assert get_current_user(access_token=token, db=db) == {"username": "alan", "role": "user", "permissions": []}
 
 
 def test_staff_and_client_tokens_are_mutually_undecodable():
@@ -91,3 +91,49 @@ def test_missing_cookie_is_refused(db):
     with pytest.raises(HTTPException) as err:
         get_current_user(access_token=None, db=db)
     assert err.value.status_code == 401
+
+
+def _staff(db, username, email, phone):
+    from passlib.hash import bcrypt
+
+    from app.entities import User, UserRole
+
+    user = User(username=username, email=email, phone=phone, hashed_password=bcrypt.hash("x" * 12),
+                role=UserRole.USER, is_active=True)
+    db.add(user)
+    db.commit()
+    return user
+
+
+def test_a_session_does_not_pass_to_whoever_reuses_the_username(client, db):
+    from app.security import create_access_token
+
+    old = _staff(db, "asha", "asha@example.com", "9876543210")
+    client.cookies.set("access_token", create_access_token({"sub": "asha", "uid": old.id, "role": "user", "tv": 0}))
+    assert client.get("/auth/me").json()["username"] == "asha"
+
+    # Asha is renamed, and someone new is given the freed-up name.
+    old.username = "asha.k"
+    db.commit()
+    _staff(db, "asha", "new.asha@example.com", "9876543211")
+
+    assert client.get("/auth/me").status_code == 401
+
+
+def test_a_session_from_before_the_id_claim_keeps_working(client, db):
+    from app.security import create_access_token
+
+    _staff(db, "asha", "asha@example.com", "9876543210")
+    client.cookies.set("access_token", create_access_token({"sub": "asha", "role": "user", "tv": 0}))
+    assert client.get("/auth/me").status_code == 200
+
+
+def test_login_ties_the_session_to_the_user_id(client, db):
+    import jwt
+
+    from app.auth.service import AuthService
+    from app.config import ALGORITHM, SECRET_KEY
+
+    user = _staff(db, "asha", "asha@example.com", "9876543210")
+    token = AuthService.authenticate_user(db, "asha@example.com", "x" * 12)
+    assert jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])["uid"] == user.id

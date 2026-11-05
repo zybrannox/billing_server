@@ -7,6 +7,7 @@ from app.entities.customer import Customer
 from app.entities.project import Project
 from app.entities.invoice import Invoice
 from app.entities.invoice_item import InvoiceItem
+from app.bin.service import BinEntry, move_to_bin
 from .calculations import compute_line
 from .model import QuotationCreate, QuotationConvertRequest
 
@@ -115,12 +116,12 @@ def update_quotation_status(db: Session, quotation_id: int, status: str):
     return quotation
 
 
-def delete_quotation(db: Session, quotation_id: int):
+def delete_quotation(db: Session, quotation_id: int, deleted_by: str):
     quotation = get_quotation(db, quotation_id)
     if not quotation:
         return False
-    db.delete(quotation)
-    db.commit()
+    label = quotation.quotation_number or f"Quotation #{quotation_id}"
+    move_to_bin(db, [BinEntry("quotation", quotation, label, quotation.customer_name)], deleted_by)
     return True
 
 

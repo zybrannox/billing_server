@@ -1,6 +1,5 @@
 from app.pagination import page_count
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from app.errors import NotFound
 from app.entities.project import Project
@@ -10,8 +9,6 @@ from .repository import (
     get_project,
     get_all_projects,
     update_project,
-    delete_project,
-    delete_projects,
     mark_design_completed,
     mark_print_completed,
     mark_delivered,
@@ -19,7 +16,7 @@ from .repository import (
     toggle_pin,
 )
 from .model import ProjectCreate, ProjectUpdate, ProjectListResponse
-from app.project_files.service import delete_project_files
+from app.bin.service import BinEntry, move_to_bin
 
 
 def service_create(db: Session, payload: ProjectCreate):
@@ -45,6 +42,7 @@ def service_list(
     assigned_to: str | None = None,
     company_id: int | None = None,
     view: str | None = None,
+    order: str | None = None,
 ) -> ProjectListResponse:
     items, total = get_all_projects(
         db,
@@ -58,6 +56,7 @@ def service_list(
         assigned_to=assigned_to,
         company_id=company_id,
         view=view,
+        order=order,
     )
     total_pages = page_count(total, page_size)
     return ProjectListResponse(
@@ -189,58 +188,38 @@ def service_toggle_pin(db: Session, project_id: int):
     return project
 
 
-def service_delete(db: Session, project_id: int):
+_INVOICED = "This project has already been invoiced and can't be deleted."
+
+
+def _bin_entry(project: Project) -> BinEntry:
+    label = project.project_type or f"Project #{project.id}"
+    if project.customer_name:
+        label += f" – {project.customer_name}"
+    count = len(project.files)
+    return BinEntry("project", project, label, f"{count} {'file' if count == 1 else 'files'}" if count else None)
+
+
+def service_delete(db: Session, project_id: int, deleted_by: str):
     project = get_project(db, project_id)
     if not project:
         raise NotFound("Project")
 
-    file_paths = [f.path for f in project.files]
-
-    # Delete DB record first, files from disk only after that actually
-    # commits - Invoice.project_id is an FK with no ondelete clause, so
-    # deleting a project that's already been invoiced violates it. Deleting
-    # the on-disk files before this could commit meant a rejected delete
-    # (rolled back, project row still there) had already lost its files for
-    # nothing; doing it in this order means a failed delete leaves both the
-    # DB row and the files untouched.
-    db.delete(project)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail="This project has already been invoiced and can't be deleted.",
-        )
-
-    delete_project_files(file_paths)
-
-    return {"message": "Project and files deleted successfully"}
+    move_to_bin(db, [_bin_entry(project)], deleted_by, _INVOICED)
+    return {"message": "Project moved to the bin"}
 
 
-def service_delete_bulk(db: Session, project_ids: list[int]):
-    # Get projects to find file paths before deletion
+def service_delete_bulk(db: Session, project_ids: list[int], deleted_by: str):
     projects = (
         db.query(Project)
         .options(selectinload(Project.files))
         .filter(Project.id.in_(project_ids))
         .all()
     )
-    file_paths = [f.path for project in projects for f in project.files]
-
-    # DB delete first, same reasoning as service_delete above - if any
-    # selected project has already been invoiced, this raises instead of
-    # committing, and files for the *whole* batch would otherwise already
-    # be gone from disk by the time that failure surfaced.
-    try:
-        deleted_projects = delete_projects(db, project_ids)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail="One or more selected projects have already been invoiced and can't be deleted.",
-        )
-
-    delete_project_files(file_paths)
-
-    return {"message": f"{len(deleted_projects)} projects and their files deleted successfully"}
+    # Together: if any of them can't go, none of them do.
+    move_to_bin(
+        db,
+        [_bin_entry(project) for project in projects],
+        deleted_by,
+        "One or more selected projects have already been invoiced and can't be deleted.",
+    )
+    return {"message": f"{len(projects)} projects moved to the bin"}

@@ -1,9 +1,13 @@
+from pathlib import Path
+
 from app.datetime_utils import utcnow
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+UPLOAD_DIR = Path("./uploads")
 
 
 class ProjectFile(Base):
@@ -46,3 +50,13 @@ class ProjectFile(Base):
     original_deleted_at = Column(DateTime, nullable=True)
 
     project = relationship("Project", back_populates="files")
+
+    @property
+    def size_bytes(self):
+        """Size of the original on disk, or None once it's gone (e.g. removed
+        by the retention job). Read from disk rather than stored, so it can
+        never disagree with the file actually being served."""
+        try:
+            return (UPLOAD_DIR / self.path).stat().st_size
+        except OSError:
+            return None

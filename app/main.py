@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from app.database import engine, Base, SessionLocal
@@ -12,6 +12,10 @@ from app.database.schema import assert_schema_is_current
 from app.users import user_router
 from app.web_security import CacheInvalidationMiddleware, CsrfHeaderMiddleware, SecurityHeadersMiddleware
 from app.audit.controller import router as audit_router
+from app.audit.tracker import install as install_activity_tracking
+from app.bin.controller import router as bin_router
+from app.notes.controller import router as notes_router
+from app.bin.service import erase_expired
 from app.system_health.controller import router as system_health_router
 from app.system_health.history import register_jobs as register_health_jobs
 from app.system_health.metrics import RequestMetricsMiddleware
@@ -70,7 +74,11 @@ app.add_middleware(CacheInvalidationMiddleware)
 # CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "https://workspace.zybrannox.com"],  # frontend
+    # Local dev servers are only trusted outside production.
+    allow_origins=[
+        "https://workspace.zybrannox.com",
+        *([] if IS_PRODUCTION else ["http://localhost:5173", "http://localhost:5174"]),
+    ],  # frontend
     allow_credentials=True,
     # Explicit lists, not "*": only what the app actually sends.
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -84,8 +92,16 @@ app.add_middleware(
     max_upload_size=2 * 1024 * 1024 * 1024  # 2GB
 )
 
-# Compress JSON/text responses (project & employee lists, etc.) for faster loads in production
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+# Compress JSON/text responses (project & employee lists, etc.) for faster loads in production.
+# application/octet-stream is what /files/download sends, and it isn't excluded
+# by default: every download was being gzipped on the fly at level 9, which
+# stripped Content-Length (no real progress, no way to detect a cut-off
+# transfer) and spent the CPU compressing already-compressed artwork.
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1024,
+    exclude_content_types=(*DEFAULT_EXCLUDED_CONTENT_TYPES, "application/octet-stream"),
+)
 
 # Outermost: stamps security headers on every response, including 403/429s
 # produced by the middleware above.
@@ -135,6 +151,18 @@ def run_retention_job():
         db.close()
 
 
+def run_bin_cleanup():
+    """Erases what's been in the bin past its 14 days. Own session, same reason as
+    run_retention_job above."""
+    db = SessionLocal()
+    try:
+        print(f"🗑️  Bin clean-up: {erase_expired(db)} items erased")
+    except Exception as e:
+        print("❌ Bin clean-up failed:", e)
+    finally:
+        db.close()
+
+
 def start_retention_scheduler():
     """Runs the storage-retention job (app/project_files/retention.py) on a
     fixed weekly schedule - every Sunday at 03:00 server time, a low-traffic
@@ -146,6 +174,12 @@ def start_retention_scheduler():
         run_retention_job,
         trigger=CronTrigger(day_of_week="sun", hour=3, minute=0),
         id="weekly_file_retention",
+        replace_existing=True,
+    )
+    retention_scheduler.add_job(
+        run_bin_cleanup,
+        trigger=CronTrigger(hour=3, minute=30),
+        id="daily_bin_cleanup",
         replace_existing=True,
     )
     register_health_jobs(retention_scheduler)
@@ -204,7 +238,11 @@ def seed_default_admin():
     finally:
         db.close()
 
+install_activity_tracking()
+
 app.include_router(audit_router)
+app.include_router(bin_router)
+app.include_router(notes_router)
 app.include_router(system_health_router)
 app.include_router(user_router)
 app.include_router(project_router)

@@ -14,6 +14,8 @@ from .job_request import JobRequest
 from .job_request_file import JobRequestFile
 from .invoice_payment import InvoicePayment
 from .audit_log import AuditLog
+from .bin_item import BinItem
+from .note import Note
 from .system_metric import SystemMetric
 
 from .document_settings import DocumentSettings

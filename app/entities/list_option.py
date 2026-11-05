@@ -1,6 +1,6 @@
 from app.datetime_utils import utcnow
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, JSON, String, UniqueConstraint
 
 from app.database import Base
 
@@ -41,3 +41,8 @@ class ListOption(Base):
     # than a parallel one so "a catalog entry" is still just one row here,
     # not a second schema to keep in sync.
     rate = Column(Float, nullable=True)
+    # The least a small job of this item costs, by size: a list of
+    # {"up_to_sq_ft", "amount"}, smallest first. Applied while filling in a bill
+    # (see billing's itemLineUtils.ts), where it can still be overridden; lines
+    # don't record their item type, so the server can't apply it afterwards.
+    min_charges = Column(JSON, nullable=True)

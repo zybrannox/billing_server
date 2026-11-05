@@ -4,12 +4,12 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app.audit import record_audit, label_of
+from app.audit import record_audit
 from app.entities import User
 from app.auth.dependencies import require_admin
 from app.users import UserCreate, UserRead, UserUpdate, UserPasswordUpdate
 from app.users import UserService
-from app.users.model import EmployeeProfile
+from app.users.model import EmployeeProfile, UserPermissionsUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -66,6 +66,23 @@ async def get_employee_profile(
     return profile
 
 
+@router.put("/{user_id}/permissions", response_model=UserRead)
+def update_user_permissions(
+    user_id: int,
+    payload: UserPermissionsUpdate,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    user = UserService.get_user_by_id(db, user_id)
+    if not user:
+        raise NotFound("User")
+    # Always a fresh list: changing one in place wouldn't register as a change.
+    user.permissions = sorted(set(payload.permissions))
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @router.put("/{user_id}", response_model=UserRead)
 async def update_user(
     user_id: int,
@@ -87,13 +104,11 @@ async def delete_user(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    label = label_of(db, User, user_id, "username")
-    success = UserService.delete_user(db, user_id)
+    success = UserService.delete_user(db, user_id, _admin["username"])
 
     if not success:
         raise NotFound("User")
 
-    record_audit(db, _admin["username"], "user.delete", "user", user_id, {"label": label})
 
     return {"detail": "User deleted successfully"}
 

@@ -52,7 +52,7 @@ class AuthService:
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User inactive")
         
-        token = create_access_token({"sub": user.username, "role": user.role.value, "tv": user.token_version or 0})
+        token = create_access_token({"sub": user.username, "uid": user.id, "role": user.role.value, "tv": user.token_version or 0})
         return token
 
     # Always returns the same generic outcome regardless of whether the

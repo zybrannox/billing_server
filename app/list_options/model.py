@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -45,6 +45,24 @@ class ListOptionCreate(BaseModel):
         return self
 
 
+class MinCharge(BaseModel):
+    up_to_sq_ft: float = Field(gt=0)
+    amount: float = Field(ge=0)
+
+
+class ListOptionPricingUpdate(BaseModel):
+    rate: Optional[float] = Field(default=None, ge=0)
+    min_charges: List[MinCharge] = []
+
+    @field_validator("min_charges")
+    @classmethod
+    def sizes_must_go_up(cls, tiers: List[MinCharge]) -> List[MinCharge]:
+        sizes = [t.up_to_sq_ft for t in tiers]
+        if sizes != sorted(set(sizes)):
+            raise ValueError("Each minimum needs a bigger size than the one before it")
+        return tiers
+
+
 class ListOptionRead(BaseModel):
     id: int
     category: str
@@ -53,5 +71,6 @@ class ListOptionRead(BaseModel):
     is_active: bool
     created_at: datetime
     rate: Optional[float] = None
+    min_charges: Optional[List[MinCharge]] = None
 
     model_config = {"from_attributes": True}

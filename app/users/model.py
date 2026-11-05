@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
+from typing import List, Literal, Optional
 from app.entities import UserRole
 from app.projects.model import ProjectRead
 from app.password_policy import StrongPassword
@@ -27,12 +27,20 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+Permission = Literal["invoice.create", "invoice.edit", "workspace.manage"]
+
+
+class UserPermissionsUpdate(BaseModel):
+    permissions: List[Permission]
+
+
 class UserPasswordUpdate(BaseModel):
     new_password: StrongPassword
 
 
 class UserRead(UserBase):
     id: int
+    permissions: List[str] = []
 
     model_config = {
         "from_attributes": True   # replaces orm_mode=True in Pydantic v2

@@ -33,6 +33,11 @@ if not DATABASE_URL.startswith("sqlite"):
         "pool_timeout": _int_env("DB_POOL_TIMEOUT_SECONDS", 30),
         "pool_recycle": _int_env("DB_POOL_RECYCLE_SECONDS", 1800),
         "pool_pre_ping": True,
+        # Every date column holds UTC with no zone attached. Without this, a date
+        # that arrives marked as UTC (any API value) is converted to the server's
+        # own zone before being stored: on an Asia/Kolkata server, each save of a
+        # project moved its dates 5.5 hours later.
+        "connect_args": {"options": "-c timezone=utc"},
     }
 
 engine = create_engine(DATABASE_URL, future=True, echo=False, **_pool_options)

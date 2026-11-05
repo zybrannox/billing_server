@@ -1,7 +1,7 @@
 from typing import Optional
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, Enum, CheckConstraint, Integer
+from sqlalchemy import String, Boolean, DateTime, Enum, CheckConstraint, Integer, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 import enum
 from app.database import Base
@@ -23,6 +23,8 @@ class User(Base):
 
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.USER)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # What an admin has granted this employee (see app/auth/permissions.py).
+    permissions: Mapped[list] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
 
     # Forgot-password verification code (see app/auth/service.py) - a
     # 6-digit code, not a token, and single-use: cleared the moment it's

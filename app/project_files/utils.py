@@ -38,11 +38,14 @@ def generate_thumbnail(filename: str, size=(300, 300)):
         print(f"Error generating thumbnail for {filename}: {e}")
         return None
 
-def get_cache_headers(max_age: int = 31536000):
+def get_cache_headers(max_age: int = 86400):
     """
-    Returns standard cache headers for static assets.
+    Cache headers for image previews and thumbnails: kept by the viewer's own
+    browser so they load instantly next time, but never by a shared cache.
+
+    These sit behind a login, and `public` let Cloudflare keep a copy (it caches
+    .jpg, .png, etc. by default) and hand it to anyone with the link, without the
+    login check ever running. A day rather than a year, so a preview of a deleted
+    file doesn't linger for long on a computer other people may use.
     """
-    return {
-        "Cache-Control": f"public, max-age={max_age}, immutable",
-        "Pragma": "cache",
-    }
+    return {"Cache-Control": f"private, max-age={max_age}"}

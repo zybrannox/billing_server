@@ -105,10 +105,11 @@ def mark_file_downloaded(db: Session, filename: str):
 
 
 def mark_project_files_downloaded(db: Session, project: Project):
-    """Flags every file on a project as downloaded (used by the zip/download-all endpoint)."""
-    db.query(ProjectFile).filter(
-        ProjectFile.project_id == project.id, ProjectFile.downloaded.is_(False)
-    ).update({"downloaded": True})
+    """Flags the files a "download all" zip actually contained - anything
+    already gone from disk wasn't in it, so it must not turn green."""
+    for file in project.files:
+        if file.size_bytes is not None:
+            file.downloaded = True
     db.commit()
 
 

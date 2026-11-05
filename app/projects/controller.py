@@ -1,9 +1,11 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.audit import record_audit, label_of
+from app.audit import record_audit
 from app.entities import Project
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 from .model import ProjectCreate, ProjectUpdate, ProjectRead, ProjectBulkDelete, ProjectListResponse
 from .service import (
     service_create,
@@ -44,6 +46,9 @@ def list_projects(
     # invoice picker, /projects/billing) is unaffected. Only the admin
     # "Ongoing Activities" page passes this.
     view: str | None = None,
+    # Status then delivery date, for the Ongoing Activities and Project History
+    # pages; unset keeps the default status/priority order for everything else.
+    order: Literal["status_delivery"] | None = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
@@ -59,6 +64,7 @@ def list_projects(
         assigned_to=assigned_to,
         company_id=company_id,
         view=view,
+        order=order,
     )
 
 
@@ -85,17 +91,12 @@ def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depend
 
 @router.delete("/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    label = label_of(db, Project, project_id, "project_type")
-    result = service_delete(db, project_id)
-    record_audit(db, current_user["username"], "project.delete", "project", project_id, {"label": label})
-    return result
+    return service_delete(db, project_id, current_user["username"])
 
 
 @router.post("/bulk-delete")
-def bulk_delete(payload: ProjectBulkDelete, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    result = service_delete_bulk(db, payload.ids)
-    record_audit(db, current_user["username"], "project.bulk_delete", "project", None, {"ids": list(payload.ids)})
-    return result
+def bulk_delete(payload: ProjectBulkDelete, db: Session = Depends(get_db), current_user: dict = Depends(require_admin)):
+    return service_delete_bulk(db, payload.ids, current_user["username"])
 
 
 # Auth-gated (any logged-in employee or admin, per get_current_user) and

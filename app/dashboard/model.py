@@ -45,7 +45,6 @@ class AttentionProject(BaseModel):
     id: int
     project_type: str
     customer_name: Optional[str] = None
-    priority: str
     print_status: str
     delivery_date: OptionalUTCDateTime = None
     is_overdue: bool
@@ -83,7 +82,6 @@ class TopCustomer(BaseModel):
 class DashboardSummary(BaseModel):
     stats: DashboardStats
     project_status_breakdown: List[StatusCount]
-    priority_breakdown: List[StatusCount]
     revenue_trend: List[RevenuePoint]
     recent_invoices: List[RecentInvoice]
     attention_projects: List[AttentionProject]

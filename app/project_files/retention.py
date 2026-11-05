@@ -17,10 +17,9 @@ ops and for verifying the job actually works without waiting a week.
 from datetime import timedelta
 from app.datetime_utils import utcnow
 
-from sqlalchemy import exists
 from sqlalchemy.orm import Session
 
-from app.entities import Invoice, Project, ProjectFile
+from app.entities import Project, ProjectFile
 
 from .service import UPLOAD_DIR
 from .utils import THUMBNAIL_DIR, generate_thumbnail
@@ -33,14 +32,18 @@ from .utils import THUMBNAIL_DIR, generate_thumbnail
 RETENTION_DAYS = 7
 
 
-def _eligible_project_filter():
-    """A project counts as "done" - and its files become eligible for
-    purge - once it meets ANY of: print work fully completed, the order
-    was delivered, or it's been invoiced. Anything still active (not yet
-    completed/delivered/invoiced) is never touched, so nobody loses a file
-    they're still mid-revision on."""
-    has_invoice = exists().where(Invoice.project_id == Project.id)
-    return (Project.print_status == "Completed") | Project.delivered_at.isnot(None) | has_invoice
+def _eligible_project_filter(cutoff):
+    """A project's files become eligible once its work has been finished for at
+    least RETENTION_DAYS: printed or delivered that long ago. Being invoiced
+    doesn't count, since invoices are routinely raised before printing starts.
+    Counting from the finish, not the upload, is what stops a job that took a
+    month from losing its artwork the moment it's completed. Print marked
+    Completed with no recorded time (older data) falls back to the upload age."""
+    return (
+        (Project.delivered_at <= cutoff)
+        | (Project.print_completed_at <= cutoff)
+        | ((Project.print_status == "Completed") & Project.print_completed_at.is_(None))
+    )
 
 
 def purge_stale_originals(db: Session) -> dict:
@@ -68,7 +71,7 @@ def purge_stale_originals(db: Session) -> dict:
         .filter(
             ProjectFile.original_deleted_at.is_(None),
             ProjectFile.created_at <= cutoff,
-            _eligible_project_filter(),
+            _eligible_project_filter(cutoff),
         )
         .all()
     )

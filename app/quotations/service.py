@@ -106,8 +106,8 @@ def service_convert(db: Session, quotation_id: int, payload: QuotationConvertReq
     return convert_quotation_to_invoice(db, quotation, payload, username)
 
 
-def service_delete(db: Session, quotation_id: int):
-    success = delete_quotation(db, quotation_id)
+def service_delete(db: Session, quotation_id: int, deleted_by: str):
+    success = delete_quotation(db, quotation_id, deleted_by)
     if not success:
         raise NotFound("Quotation")
-    return {"message": "Quotation deleted successfully"}
+    return {"message": "Quotation moved to the bin"}

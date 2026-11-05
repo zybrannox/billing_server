@@ -6,7 +6,6 @@ from app.invoices.repository import get_latest_invoice_statuses
 
 from .repository import (
     get_attention_projects,
-    get_priority_breakdown,
     get_project_status_breakdown,
     get_recent_deliveries,
     get_recent_invoices,
@@ -24,7 +23,6 @@ def service_get_summary(db: Session, granularity: str = "month") -> dict:
     return {
         "stats": get_stats(db),
         "project_status_breakdown": get_project_status_breakdown(db),
-        "priority_breakdown": get_priority_breakdown(db),
         "revenue_trend": get_revenue_trend(db, granularity=granularity),
         "top_customers": get_top_customers(db),
         "recent_invoices": [
@@ -44,7 +42,6 @@ def service_get_summary(db: Session, granularity: str = "month") -> dict:
                 "id": p.id,
                 "project_type": p.project_type,
                 "customer_name": p.customer_name,
-                "priority": p.priority,
                 "print_status": p.print_status,
                 "delivery_date": p.delivery_date,
                 "is_overdue": bool(p.delivery_date and p.delivery_date < utcnow()),

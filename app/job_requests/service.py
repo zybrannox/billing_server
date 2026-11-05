@@ -1,7 +1,10 @@
 from app.pagination import page_count, paginate
 from app.datetime_utils import utcnow
 
+from pathlib import Path
+
 from sqlalchemy.orm import Session
+from app.project_files.service import UPLOAD_DIR
 from app.errors import NotFound, BadRequest
 
 from app.entities import Customer, Company, Project, ProjectFile, JobRequest, JobRequestFile
@@ -59,12 +62,26 @@ class JobRequestService:
         return job_request
 
     @staticmethod
+    def file_is_attached(db: Session, path: str) -> bool:
+        return (
+            db.query(ProjectFile.id).filter(ProjectFile.path == path).first() is not None
+            or db.query(JobRequestFile.id).filter(JobRequestFile.path == path).first() is not None
+        )
+
+    @staticmethod
     def attach_files(db: Session, client: dict, job_request_id: int, payload: AttachJobRequestFilesRequest) -> JobRequestRead:
         # Only the filer (not just any contact of their company) can attach
         # files to their own still-open submission.
         job_request = db.get(JobRequest, job_request_id)
         if not job_request or job_request.customer_id != client["customer_id"]:
             raise NotFound("Job request")
+
+        for f in payload.files:
+            # Only a file this client has just uploaded: nothing outside uploads,
+            # and nothing already attached to someone's job or project.
+            name = Path(f.path).name
+            if name != f.path or not (UPLOAD_DIR / name).is_file() or JobRequestService.file_is_attached(db, name):
+                raise BadRequest("One of these files is no longer available. Please upload it again.")
 
         for f in payload.files:
             db.add(

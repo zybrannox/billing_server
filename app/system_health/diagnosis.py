@@ -8,6 +8,10 @@ from typing import Any
 SEVERITY_ORDER = {"ok": 0, "info": 1, "warning": 2, "critical": 3}
 
 
+def _size(mb: float) -> str:
+    return f"{mb / 1024:.1f} GB" if mb >= 1024 else f"{mb:.0f} MB"
+
+
 def _finding(severity: str, title: str, detail: str, action: str) -> dict[str, str]:
     return {"severity": severity, "title": title, "detail": detail, "action": action}
 
@@ -29,46 +33,49 @@ def diagnose(
     if candidates:
         biggest = max(candidates)
 
+    # Written for whoever runs the shop, not for a developer: what is happening,
+    # why it matters, and what to do about it.
+
     # --- memory -------------------------------------------------------------
     available_pct, swap_mb = machine["memory_available_pct"], machine["swap_used_mb"]
     if available_pct < 8 or swap_mb > 2048:
-        culprit = f" The biggest user is {biggest[1]} ({biggest[0]:.0f} MB)." if biggest else ""
+        culprit = f" {biggest[1]} is using the most ({_size(biggest[0])})." if biggest else ""
         findings.append(_finding(
-            "critical", "The machine is out of memory",
-            f"Only {available_pct:.0f}% of RAM is free and {swap_mb:.0f} MB has spilled to disk (swap), "
-            f"which makes everything slow.{culprit}",
-            "Close or quit whatever isn't needed on this Mac, then restart the heaviest process. "
-            "Lower DB_POOL_SIZE if the database is the heavy one.",
+            "critical", "The server has run out of memory",
+            f"Only {available_pct:.0f}% of its memory is free, so everything in the app will feel slow.{culprit}",
+            "Close any programs you aren't using on the server computer. If it's still slow, restart that computer.",
         ))
     elif available_pct < 15 or swap_mb > 512:
-        culprit = f" Biggest user: {biggest[1]} ({biggest[0]:.0f} MB)." if biggest else ""
+        culprit = f" {biggest[1]} is using the most ({_size(biggest[0])})." if biggest else ""
         findings.append(_finding(
-            "warning", "Memory is getting tight",
-            f"{available_pct:.0f}% of RAM is free, {swap_mb:.0f} MB in swap.{culprit}",
-            "Keep an eye on it; free some memory before it starts to lag.",
+            "warning", "The server is running low on memory",
+            f"Only {available_pct:.0f}% of its memory is free. The app may start to feel slow.{culprit}",
+            "Close any programs you aren't using on the server computer.",
         ))
 
     # --- one process hogging RAM -------------------------------------------
     for other in processes.get("other_top", [])[:1]:
         if other["memory_pct"] >= 25:
             findings.append(_finding(
-                "warning", f"{other['name']} is using {other['memory_pct']:.0f}% of the RAM",
-                "That is not part of this application, so it is competing with it for memory.",
-                "Quit it on the server Mac, or move it elsewhere.",
+                "warning", f"{other['name']} is using {other['memory_pct']:.0f}% of the server's memory",
+                "It isn't part of this app, so it leaves less memory for the app.",
+                "If nobody needs it, close it on the server computer.",
             ))
 
     # --- CPU ----------------------------------------------------------------
     load = machine["load_per_core"]
     if load >= 2:
         findings.append(_finding(
-            "critical", "The CPU is overloaded",
-            f"Load is {load:.1f} per core (1.0 means fully busy).",
-            "Look for a runaway process in Top processes; large image uploads and thumbnail jobs are heavy.",
+            "critical", "The server is overloaded",
+            "It has more work than it can keep up with, so the app will feel slow. "
+            "Large uploads and big downloads are the usual cause.",
+            "Wait for large uploads or downloads to finish. If it stays like this, restart the server computer.",
         ))
     elif load >= 1:
         findings.append(_finding(
-            "warning", "The CPU is busy", f"Load is {load:.1f} per core.",
-            "If this keeps up, check what is running in Top processes.",
+            "warning", "The server is very busy",
+            "It's working at full capacity, so the app may feel a little slow.",
+            "Usually this passes by itself. If it lasts more than an hour, restart the server computer.",
         ))
 
     # --- disk ---------------------------------------------------------------
@@ -76,22 +83,22 @@ def diagnose(
     if free < 5:
         findings.append(_finding(
             "critical", "The disk is almost full",
-            f"Only {free:.0f}% ({machine['disk_free_gb']:.1f} GB) is free. A full disk makes uploads fail and slows the database.",
-            "Delete old backups or customer files, or move the uploads folder to a bigger drive.",
+            f"Only {machine['disk_free_gb']:.1f} GB is left. When it's full, uploads will fail and the app can stop working.",
+            "Free up space now: empty the Bin in System setup, delete old backups, or move files to a bigger drive.",
         ))
     elif free < 10:
         findings.append(_finding(
             "warning", "The disk is filling up",
-            f"{free:.0f}% ({machine['disk_free_gb']:.1f} GB) is free.",
-            "Plan to clear space or add storage soon.",
+            f"{machine['disk_free_gb']:.1f} GB is left. When it's full, uploads will fail.",
+            "Free up some space soon: empty the Bin in System setup or delete old backups.",
         ))
 
     # --- database connections ----------------------------------------------
     if pool and pool["size"] and pool["in_use"] / pool["size"] >= 0.8:
         findings.append(_finding(
-            "warning", "Nearly all database connections are in use",
-            f"{pool['in_use']} of {pool['size']} are busy, so new requests may have to wait.",
-            "Usually a symptom of slow queries (see below). Raising DB_POOL_SIZE adds memory use.",
+            "warning", "The app is handling a lot of requests at once",
+            "New requests may have to wait a moment before they're answered.",
+            "This usually clears by itself. If it keeps happening, tell your developer.",
         ))
 
     # --- app latency / errors ----------------------------------------------
@@ -102,34 +109,34 @@ def diagnose(
         if slow_queries and not system_stressed:
             top = max(slow_queries, key=lambda q: q["ms"])
             findings.append(_finding(
-                "warning", "The app is slow but the machine is fine",
-                f"Typical slow requests take about {p95 / 1000:.1f}s. The slowest recent database query took "
-                f"{top['ms']} ms, so the cause is likely a heavy query.",
-                "See Slow database queries below; an index or a smaller page size usually fixes it.",
+                "warning", "Some pages are slow, but the server is fine",
+                f"The slowest pages take about {p95 / 1000:.1f} seconds to open. "
+                f"Looking up the data took up to {top['ms'] / 1000:.1f} seconds, so that's the likely cause.",
+                "Nothing you can fix from here. If it bothers you, tell your developer.",
             ))
         elif not system_stressed:
             findings.append(_finding(
-                "warning", "Requests are slow with no obvious machine cause",
-                f"About 5% of requests take over {p95 / 1000:.1f}s.",
-                "Check Slowest requests below to see which page it is.",
+                "warning", "Some pages are slow",
+                f"The slowest pages take about {p95 / 1000:.1f} seconds to open, and the server itself looks fine.",
+                "Nothing you can fix from here. If it bothers you, tell your developer.",
             ))
         else:
             findings.append(_finding(
-                "info", "Requests are slow",
-                f"About 5% of requests take over {p95 / 1000:.1f}s - consistent with the resource problem above.",
-                "Fix that first, then re-check.",
+                "info", "Some pages are slow",
+                f"The slowest pages take about {p95 / 1000:.1f} seconds to open, because of the problem above.",
+                "Fix that first, and this should improve by itself.",
             ))
     if requests >= 20 and performance.get("errors", 0) / requests >= 0.05:
         findings.append(_finding(
-            "warning", "Many requests are failing",
-            f"{performance['errors']} of the last {requests} requests returned a server error.",
-            "Check the backend log (and Sentry, if enabled) for the error.",
+            "warning", "Some actions are failing",
+            f"{performance['errors']} of the last {requests} requests ended in an error, so people may be seeing error messages.",
+            "Tell your developer. They can find the cause in the server's log.",
         ))
 
     if active_uploads and (available_pct < 20 or load >= 1):
         findings.append(_finding(
-            "info", f"{active_uploads} large upload(s) in progress",
-            "Uploads and the thumbnails made from them use a lot of memory and CPU.",
+            "info", f"{active_uploads} large upload{'s' if active_uploads != 1 else ''} in progress",
+            "Large uploads use a lot of the server's capacity while they run.",
             "It should ease off once they finish.",
         ))
 
@@ -138,7 +145,7 @@ def diagnose(
     if not findings:
         findings.append(_finding(
             "ok", "Everything looks healthy",
-            "Memory, CPU, disk, database connections and response times are all within normal range.",
+            "The app is responding quickly and the server has plenty of room.",
             "Nothing to do.",
         ))
     return {"verdict": verdict, "findings": findings}

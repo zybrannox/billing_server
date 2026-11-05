@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth.dependencies import get_current_user, require_admin
+from app.auth.permissions import WORKSPACE_MANAGE, require_permission
 from app.client_auth.dependencies import get_current_client
 from .model import DocumentSettingsRead, DocumentSettingsUpdate
 from .service import (
@@ -48,7 +49,7 @@ def get_settings(db: Session = Depends(get_db), _user: dict = Depends(staff_or_c
 def update_settings(
     payload: DocumentSettingsUpdate,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    _user: dict = Depends(require_permission(WORKSPACE_MANAGE)),
 ):
     return service_update(db, payload)
 
@@ -65,11 +66,11 @@ def get_logo(db: Session = Depends(get_db), _user: dict = Depends(staff_or_clien
 async def upload_logo(
     file: UploadFile,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    _user: dict = Depends(require_permission(WORKSPACE_MANAGE)),
 ):
     return await service_set_logo(db, file)
 
 
 @router.delete("/logo", response_model=DocumentSettingsRead)
-def delete_logo(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
+def delete_logo(db: Session = Depends(get_db), _user: dict = Depends(require_permission(WORKSPACE_MANAGE))):
     return service_remove_logo(db)

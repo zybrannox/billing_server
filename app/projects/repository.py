@@ -56,6 +56,26 @@ _PRIORITY_RANK = case(
     else_=5,
 )
 
+# The Ongoing Activities and Project History boards: work being done now on top,
+# then work not started, with finished work at the bottom. Within each status the
+# latest delivery date comes first (today, then yesterday, and so on), so anything
+# upcoming sits above today.
+_BOARD_STATUS_RANK = case(
+    (Project.print_status == "In Progress", 1),
+    (Project.print_status == "Pending", 2),
+    (Project.print_status == "Completed", 4),
+    else_=3,
+)
+_ORDERS = {
+    None: (
+        _PRINT_STATUS_RANK,
+        _COMPLETED_DELIVERED,
+        _AWAITING_DELIVERY_DUE.asc().nulls_last(),
+        _COMPLETED_DELIVERED_AT.desc().nulls_last(),
+    ),
+    "status_delivery": (_BOARD_STATUS_RANK, Project.delivery_date.desc().nulls_last()),
+}
+
 
 def get_all_projects(
     db: Session,
@@ -74,6 +94,8 @@ def get_all_projects(
     # exactly as before. Only the admin "Ongoing Activities" page passes
     # "ongoing" (see app/projects/controller.py).
     view: str | None = None,
+    # See _ORDERS; unset keeps the default status/priority order.
+    order: str | None = None,
 ):
     query = db.query(Project).options(
         joinedload(Project.customer), selectinload(Project.files)
@@ -151,10 +173,7 @@ def get_all_projects(
         # only pinning-to-the-top-of-whatever-page-you're-on.
         query.order_by(
             Project.pinned.desc(),
-            _PRINT_STATUS_RANK,
-            _COMPLETED_DELIVERED,
-            _AWAITING_DELIVERY_DUE.asc().nulls_last(),
-            _COMPLETED_DELIVERED_AT.desc().nulls_last(),
+            *_ORDERS[order],
             _PRIORITY_RANK,
             Project.id.desc(),
         )
@@ -275,18 +294,3 @@ def toggle_pin(db: Session, project_id: int):
     return db_project
 
 
-def delete_project(db: Session, project_id: int):
-    db_project = get_project(db, project_id)
-    if not db_project:
-        return None
-
-    db.delete(db_project)
-    db.commit()
-    return True
-
-def delete_projects(db: Session, project_ids: list[int]):
-    projects = db.query(Project).filter(Project.id.in_(project_ids)).all()
-    for project in projects:
-        db.delete(project)
-    db.commit()
-    return projects

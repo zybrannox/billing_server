@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from sqlalchemy.exc import IntegrityError
 from app.errors import BadRequest
+from app.bin.service import BinEntry, move_to_bin
 from app.entities import Company, Customer, Project, Invoice
 from app.companies.model import CompanyStats, CompanyProfile
 
@@ -158,10 +159,10 @@ class CompanyService:
         return company
 
     @staticmethod
-    def delete_company(db: Session, company_id: int) -> bool:
+    def delete_company(db: Session, company_id: int, deleted_by: str) -> bool:
         company = db.get(Company, company_id)
         if not company:
             return False
-        db.delete(company)  # ON DELETE SET NULL detaches contacts, doesn't delete them
-        db.commit()
+        # Its contacts stay as ordinary customers; restoring links them back.
+        move_to_bin(db, [BinEntry("company", company, company.name)], deleted_by)
         return True

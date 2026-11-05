@@ -33,6 +33,9 @@ def get_current_client(client_access_token: str = Cookie(None), db: Session = De
     if not customer:
         raise HTTPException(status_code=401, detail="Linked customer no longer exists")
 
+    # Who the activity log credits for what this request changes (app/audit/tracker.py).
+    db.info["actor"] = f"client:{account.email or account.id}"
+
     return {
         "client_account_id": account.id,
         "customer_id": customer.id,

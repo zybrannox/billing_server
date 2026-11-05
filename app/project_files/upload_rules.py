@@ -1,4 +1,4 @@
-"""Per-type size limits and content sniffing for uploads.
+"""Size limit and content sniffing for uploads.
 
 The extension denylist in service.py stops obviously dangerous names, but a
 name is just a label: `invoice.pdf` can hold a Windows executable, and a
@@ -17,26 +17,16 @@ from fastapi import HTTPException
 MB = 1024 * 1024
 GB = 1024 * MB
 
-# Largest accepted file per extension; anything not listed gets DEFAULT_MAX.
-DEFAULT_MAX = 1 * GB
-_MAX_BY_EXT: dict[str, int] = {
-    **dict.fromkeys((".pdf",), 200 * MB),
-    **dict.fromkeys((".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".rtf"), 50 * MB),
-    **dict.fromkeys((".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"), 300 * MB),
-}
-
-
-def max_size_for(ext: str) -> int:
-    return _MAX_BY_EXT.get(ext.lower(), DEFAULT_MAX)
+# The same for every type: print-ready PDFs and high-resolution images are just
+# as likely to be huge as a PSD is.
+MAX_FILE_SIZE = 1 * GB
 
 
 def check_size(filename: str, size: int) -> None:
-    ext = Path(filename).suffix.lower()
-    limit = max_size_for(ext)
-    if size > limit:
+    if size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
-            detail=f"File '{filename}' exceeds the {limit // MB} MB limit for {ext or 'this'} files",
+            detail=f"File '{filename}' exceeds the 1 GB limit",
         )
 
 

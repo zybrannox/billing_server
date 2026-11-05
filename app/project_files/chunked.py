@@ -8,11 +8,12 @@ This splits an upload into fixed-size chunks client-side (see
 chunkedUpload.ts), each safely under that cap, uploaded independently and
 reassembled here.
 """
+import math
 import time
 import uuid
 from pathlib import Path
 from threading import Lock
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 from fastapi import HTTPException
 from app.errors import BadRequest
@@ -29,7 +30,9 @@ CHUNK_SIZE = 20 * 1024 * 1024  # 20MB
 MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB - matches the existing per-file cap
 
 # Abandoned sessions (browser closed mid-upload, etc.) are cleaned up after
-# this long rather than lingering on disk forever.
+# this long without a chunk arriving, rather than lingering on disk forever.
+# Measured from the last activity, not the start: a 1GB file on a slow uplink
+# can legitimately take longer than this overall.
 SESSION_TTL_SECONDS = 2 * 60 * 60
 
 CHUNK_UPLOAD_DIR = UPLOAD_DIR / ".chunked"
@@ -46,6 +49,8 @@ class ChunkedUploadSession:
         "received",
         "temp_path",
         "created_at",
+        "last_activity",
+        "stored_name",
         "lock",
     )
 
@@ -58,6 +63,10 @@ class ChunkedUploadSession:
         self.received: Set[int] = set()
         self.temp_path = CHUNK_UPLOAD_DIR / f"{self.upload_id}.part"
         self.created_at = time.time()
+        self.last_activity = self.created_at
+        # Set once complete_upload has moved the file into place, so a retried
+        # /complete (its response got lost) returns the same file.
+        self.stored_name: Optional[str] = None
         # Guards writes to this session's temp file - chunks can arrive
         # concurrently (the client uploads several in parallel), and each
         # write is a seek+write pair that must not interleave with another.
@@ -78,12 +87,19 @@ def _gc_stale_sessions() -> None:
     stale = [
         uid
         for uid, s in _sessions.items()
-        if now - s.created_at > SESSION_TTL_SECONDS
+        if now - s.last_activity > SESSION_TTL_SECONDS
     ]
     for uid in stale:
         s = _sessions.pop(uid, None)
         if s and s.temp_path.exists():
             s.temp_path.unlink()
+
+    # Sessions live in memory, so a restart forgets them and leaves their
+    # (up to 1GB) part files behind with nothing else to ever remove them.
+    live = {s.temp_path for s in _sessions.values()}
+    for part in CHUNK_UPLOAD_DIR.glob("*.part"):
+        if part not in live and now - part.stat().st_mtime > SESSION_TTL_SECONDS:
+            part.unlink(missing_ok=True)
 
 
 def init_upload(filename: str, total_size: int, total_chunks: int) -> str:
@@ -98,7 +114,7 @@ def init_upload(filename: str, total_size: int, total_chunks: int) -> str:
             status_code=413, detail="File exceeds maximum size of 1GB"
         )
     check_size(filename, total_size)
-    if total_chunks < 1:
+    if total_size < 1 or total_chunks != math.ceil(total_size / CHUNK_SIZE):
         raise BadRequest("Invalid chunk count")
 
     with _sessions_lock:
@@ -127,12 +143,21 @@ def write_chunk(upload_id: str, chunk_index: int, data: bytes) -> None:
     if chunk_index < 0 or chunk_index >= session.total_chunks:
         raise BadRequest("Invalid chunk index")
 
+    # A chunk cut short in transit must not count as received: the file would
+    # be reported as uploaded with part of it silently left as zeros.
     offset = chunk_index * CHUNK_SIZE
+    expected = min(CHUNK_SIZE, session.total_size - offset)
+    if len(data) != expected:
+        raise BadRequest(f"Chunk {chunk_index} is incomplete, please resend it")
+
     with session.lock:
+        if session.stored_name:
+            raise BadRequest("Upload already completed")
         with session.temp_path.open("r+b") as f:
             f.seek(offset)
             f.write(data)
         session.received.add(chunk_index)
+        session.last_activity = time.time()
 
 
 def complete_upload(upload_id: str) -> str:
@@ -141,27 +166,30 @@ def complete_upload(upload_id: str) -> str:
         raise HTTPException(
             status_code=404, detail="Upload session not found or expired"
         )
-    if len(session.received) != session.total_chunks:
-        missing = session.total_chunks - len(session.received)
-        raise BadRequest(f"Upload incomplete: {missing} chunk(s) missing")
+    with session.lock:
+        if session.stored_name:
+            return session.stored_name
 
-    # The bytes must match what the name claims (see upload_rules.py).
-    try:
-        verify_file(session.temp_path, session.filename)
-    except HTTPException:
-        with _sessions_lock:
-            _sessions.pop(upload_id, None)
-        session.temp_path.unlink(missing_ok=True)
-        raise
+        if len(session.received) != session.total_chunks:
+            missing = session.total_chunks - len(session.received)
+            raise BadRequest(f"Upload incomplete: {missing} chunk(s) missing")
 
-    stored_name = f"{uuid.uuid4().hex}{session.ext}"
-    final_path = UPLOAD_DIR / stored_name
-    # Same filesystem (uploads/.chunked -> uploads/), so this is a fast
-    # rename, not a second full data copy of a file that was already
-    # written to disk chunk by chunk.
-    session.temp_path.rename(final_path)
+        # The bytes must match what the name claims (see upload_rules.py).
+        try:
+            verify_file(session.temp_path, session.filename)
+        except HTTPException:
+            with _sessions_lock:
+                _sessions.pop(upload_id, None)
+            session.temp_path.unlink(missing_ok=True)
+            raise
 
-    with _sessions_lock:
-        _sessions.pop(upload_id, None)
+        stored_name = f"{uuid.uuid4().hex}{session.ext}"
+        # Same filesystem (uploads/.chunked -> uploads/), so this is a fast
+        # rename, not a second full data copy of a file that was already
+        # written to disk chunk by chunk.
+        session.temp_path.rename(UPLOAD_DIR / stored_name)
+        # The session stays until the normal clean-up so a retry can find it.
+        session.stored_name = stored_name
+        session.last_activity = time.time()
 
     return stored_name

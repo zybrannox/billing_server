@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
 from app.project_files import service
-from app.project_files.upload_rules import MB, check_size, max_size_for, sniff_problem
+from app.project_files.upload_rules import sniff_problem
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
 JPEG = b"\xff\xd8\xff\xe0" + b"\0" * 32
@@ -32,14 +32,6 @@ def test_genuine_files_pass(header, ext):
 )
 def test_disguised_or_mismatched_files_are_flagged(header, ext):
     assert sniff_problem(header, ext)
-
-
-def test_size_limits_depend_on_the_type():
-    assert max_size_for(".pdf") < max_size_for(".psd")
-    check_size("a.psd", 500 * MB)  # large design file: fine
-    with pytest.raises(HTTPException) as err:
-        check_size("a.pdf", 500 * MB)
-    assert err.value.status_code == 413
 
 
 def test_a_rejected_upload_is_not_left_on_disk(tmp_path, monkeypatch):

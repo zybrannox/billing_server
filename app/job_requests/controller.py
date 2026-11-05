@@ -6,7 +6,7 @@ from app.errors import NotFound
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_admin
 from app.client_auth.dependencies import get_current_client
 from pathlib import Path
 from app.project_files.service import save_streaming_file, delete_uploaded_file
@@ -91,14 +91,16 @@ def upload_files_for_job_request(
 # Lets a client remove a file they picked before submitting (mirrors
 # AddProject.tsx's cancel-cleanup, which calls the staff-only DELETE
 # /files/{filename} for the same reason) - a client session can't call
-# that route, so this is a client-gated twin. No JobRequestFile row exists
-# yet at this point (see /upload above), so there's nothing to
-# ownership-check against beyond the token itself; the on-disk filename is
-# an unguessable UUID, the same opaqueness /public/documents/{token} relies
-# on.
+# that route, so this is a client-gated twin. A file only belongs to nobody
+# until it's attached to something, so anything already attached is off limits:
+# portal responses reveal those names, and this deletes for good, with no Bin.
+# Before that, the on-disk filename is an unguessable UUID, the same opaqueness
+# /public/documents/{token} relies on.
 @router.delete("/upload/{path}")
-def delete_own_upload(path: str, client: dict = Depends(get_current_client)):
+def delete_own_upload(path: str, db: Session = Depends(get_db), client: dict = Depends(get_current_client)):
     safe_name = Path(path).name
+    if JobRequestService.file_is_attached(db, safe_name):
+        raise NotFound("File")
     deleted = delete_uploaded_file(safe_name)
     if not deleted:
         raise NotFound("File")
@@ -138,13 +140,13 @@ def list_for_staff(
     page_size: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(require_admin),
 ):
     return JobRequestService.list_for_staff(db, page, page_size, status)
 
 
 @router.get("/{job_request_id}", response_model=JobRequestRead)
-def get_for_staff(job_request_id: int, db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
+def get_for_staff(job_request_id: int, db: Session = Depends(get_db), _user: dict = Depends(require_admin)):
     return JobRequestService.get_for_staff(db, job_request_id)
 
 
@@ -152,7 +154,7 @@ def get_for_staff(job_request_id: int, db: Session = Depends(get_db), _user: dic
 def convert(
     job_request_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     return JobRequestService.convert_to_project(db, job_request_id, current_user["username"])
 
@@ -162,6 +164,6 @@ def reject(
     job_request_id: int,
     payload: JobRequestRejectRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     return JobRequestService.reject(db, job_request_id, current_user["username"], payload.reason)

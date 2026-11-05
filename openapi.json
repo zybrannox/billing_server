@@ -166,10 +166,6 @@
             "title": "Print Status",
             "type": "string"
           },
-          "priority": {
-            "title": "Priority",
-            "type": "string"
-          },
           "project_type": {
             "title": "Project Type",
             "type": "string"
@@ -178,7 +174,6 @@
         "required": [
           "id",
           "project_type",
-          "priority",
           "print_status",
           "is_overdue"
         ],
@@ -277,6 +272,118 @@
           "detail"
         ],
         "title": "AuditLogRead",
+        "type": "object"
+      },
+      "BinItemRead": {
+        "properties": {
+          "deleted_at": {
+            "title": "Deleted At",
+            "type": "string"
+          },
+          "deleted_by": {
+            "title": "Deleted By",
+            "type": "string"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item_type": {
+            "title": "Item Type",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "item_type",
+          "label",
+          "detail",
+          "size_bytes",
+          "deleted_by",
+          "deleted_at",
+          "expires_at"
+        ],
+        "title": "BinItemRead",
+        "type": "object"
+      },
+      "BinListResponse": {
+        "properties": {
+          "counts": {
+            "items": {
+              "$ref": "#/components/schemas/BinTypeCount"
+            },
+            "title": "Counts",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BinItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_size_bytes": {
+            "title": "Total Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "counts",
+          "total_size_bytes",
+          "retention_days"
+        ],
+        "title": "BinListResponse",
+        "type": "object"
+      },
+      "BinTypeCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "item_type": {
+            "title": "Item Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_type",
+          "count"
+        ],
+        "title": "BinTypeCount",
         "type": "object"
       },
       "Body_create_invoice_share_link_invoices__invoice_id__share_link_post": {
@@ -1157,6 +1264,17 @@
             "title": "Id",
             "type": "integer"
           },
+          "invoice_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Count"
+          },
           "last_name": {
             "title": "Last Name",
             "type": "string"
@@ -1360,13 +1478,6 @@
             "title": "Attention Projects",
             "type": "array"
           },
-          "priority_breakdown": {
-            "items": {
-              "$ref": "#/components/schemas/StatusCount"
-            },
-            "title": "Priority Breakdown",
-            "type": "array"
-          },
           "project_status_breakdown": {
             "items": {
               "$ref": "#/components/schemas/StatusCount"
@@ -1409,7 +1520,6 @@
         "required": [
           "stats",
           "project_status_breakdown",
-          "priority_breakdown",
           "revenue_trend",
           "recent_invoices",
           "attention_projects",
@@ -1960,6 +2070,39 @@
             "title": "Path",
             "type": "string"
           },
+          "pixel_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pixel Height"
+          },
+          "pixel_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pixel Width"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
           "width": {
             "anyOf": [
               {
@@ -2206,6 +2349,17 @@
                 "type": "null"
               }
             ]
+          },
+          "note_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note Id"
           },
           "payment_method": {
             "anyOf": [
@@ -2638,12 +2792,18 @@
             "type": "integer"
           },
           "project_type": {
-            "title": "Project Type",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Type"
           }
         },
         "required": [
-          "project_type",
           "customer_id"
         ],
         "title": "InvoiceNewProject",
@@ -2866,6 +3026,38 @@
         "title": "InvoiceRead",
         "type": "object"
       },
+      "InvoiceSummary": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/InvoiceViewCounts"
+          },
+          "due_today": {
+            "title": "Due Today",
+            "type": "number"
+          },
+          "due_within_30_days": {
+            "title": "Due Within 30 Days",
+            "type": "number"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "number"
+          },
+          "total_outstanding": {
+            "title": "Total Outstanding",
+            "type": "number"
+          }
+        },
+        "required": [
+          "total_outstanding",
+          "due_today",
+          "due_within_30_days",
+          "overdue",
+          "counts"
+        ],
+        "title": "InvoiceSummary",
+        "type": "object"
+      },
       "InvoiceUpdate": {
         "properties": {
           "advance_amount": {
@@ -2995,6 +3187,39 @@
           }
         },
         "title": "InvoiceUpdate",
+        "type": "object"
+      },
+      "InvoiceViewCounts": {
+        "properties": {
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "integer"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "paid": {
+            "title": "Paid",
+            "type": "integer"
+          },
+          "unpaid": {
+            "title": "Unpaid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "unpaid",
+          "overdue",
+          "paid",
+          "cancelled"
+        ],
+        "title": "InvoiceViewCounts",
         "type": "object"
       },
       "JobRequestCreate": {
@@ -3315,6 +3540,32 @@
         "title": "ListOptionCreate",
         "type": "object"
       },
+      "ListOptionPricingUpdate": {
+        "properties": {
+          "min_charges": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MinCharge"
+            },
+            "title": "Min Charges",
+            "type": "array"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          }
+        },
+        "title": "ListOptionPricingUpdate",
+        "type": "object"
+      },
       "ListOptionRead": {
         "properties": {
           "category": {
@@ -3333,6 +3584,20 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "min_charges": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MinCharge"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Charges"
           },
           "rate": {
             "anyOf": [
@@ -3472,6 +3737,227 @@
           "payment_method"
         ],
         "title": "MarkInvoicePaidRequest",
+        "type": "object"
+      },
+      "MinCharge": {
+        "properties": {
+          "amount": {
+            "minimum": 0.0,
+            "title": "Amount",
+            "type": "number"
+          },
+          "up_to_sq_ft": {
+            "exclusiveMinimum": 0.0,
+            "title": "Up To Sq Ft",
+            "type": "number"
+          }
+        },
+        "required": [
+          "up_to_sq_ft",
+          "amount"
+        ],
+        "title": "MinCharge",
+        "type": "object"
+      },
+      "NoteCreate": {
+        "properties": {
+          "customer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "text": {
+            "maxLength": 5000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "NoteCreate",
+        "type": "object"
+      },
+      "NoteListResponse": {
+        "properties": {
+          "done_count": {
+            "title": "Done Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NoteRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "open_count": {
+            "title": "Open Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "open_count",
+          "done_count"
+        ],
+        "title": "NoteListResponse",
+        "type": "object"
+      },
+      "NoteRead": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "customer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "done_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done By"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "invoice_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Id"
+          },
+          "invoice_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Number"
+          },
+          "is_done": {
+            "title": "Is Done",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "customer_id",
+          "customer_name",
+          "created_by",
+          "created_at",
+          "is_done",
+          "done_at",
+          "done_by",
+          "invoice_id",
+          "invoice_number"
+        ],
+        "title": "NoteRead",
+        "type": "object"
+      },
+      "NoteUpdate": {
+        "properties": {
+          "customer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "is_done": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Done"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "NoteUpdate",
         "type": "object"
       },
       "OtherProcessRead": {
@@ -3719,6 +4205,7 @@
             "type": "string"
           },
           "priority": {
+            "default": "Normal",
             "enum": [
               "Urgent",
               "High",
@@ -3740,7 +4227,6 @@
         "required": [
           "project_type",
           "assigned_to",
-          "priority",
           "client_status",
           "start_date",
           "delivery_date"
@@ -4145,6 +4631,7 @@
             "type": "string"
           },
           "priority": {
+            "default": "Normal",
             "enum": [
               "Urgent",
               "High",
@@ -4165,7 +4652,6 @@
         "required": [
           "project_type",
           "assigned_to",
-          "priority",
           "client_status",
           "start_date",
           "delivery_date",
@@ -4366,6 +4852,7 @@
             "type": "string"
           },
           "priority": {
+            "default": "Normal",
             "enum": [
               "Urgent",
               "High",
@@ -4382,7 +4869,6 @@
         },
         "required": [
           "assigned_to",
-          "priority",
           "client_status",
           "start_date",
           "delivery_date"
@@ -5409,6 +5895,27 @@
         "title": "UserPasswordUpdate",
         "type": "object"
       },
+      "UserPermissionsUpdate": {
+        "properties": {
+          "permissions": {
+            "items": {
+              "enum": [
+                "invoice.create",
+                "invoice.edit",
+                "workspace.manage"
+              ],
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "permissions"
+        ],
+        "title": "UserPermissionsUpdate",
+        "type": "object"
+      },
       "UserRead": {
         "properties": {
           "email": {
@@ -5431,6 +5938,14 @@
             ],
             "default": true,
             "title": "Is Active"
+          },
+          "permissions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
           },
           "phone": {
             "title": "Phone",
@@ -5991,6 +6506,225 @@
         "summary": "Reset Password",
         "tags": [
           "Auth"
+        ]
+      }
+    },
+    "/bin/": {
+      "delete": {
+        "operationId": "empty_bin_bin__delete",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Empty Bin",
+        "tags": [
+          "Bin"
+        ]
+      },
+      "get": {
+        "operationId": "list_bin_bin__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "item_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Type"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Bin",
+        "tags": [
+          "Bin"
+        ]
+      }
+    },
+    "/bin/{item_id}": {
+      "delete": {
+        "operationId": "erase_item_bin__item_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Erase Item",
+        "tags": [
+          "Bin"
+        ]
+      }
+    },
+    "/bin/{item_id}/restore": {
+      "post": {
+        "operationId": "restore_item_bin__item_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinItemRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Item",
+        "tags": [
+          "Bin"
         ]
       }
     },
@@ -7463,9 +8197,136 @@
         ]
       }
     },
+    "/files/download/progress/{progress_id}": {
+      "get": {
+        "description": "How far a large download has got (see download_progress.py).",
+        "operationId": "read_download_progress_files_download_progress__progress_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "progress_id",
+            "required": true,
+            "schema": {
+              "title": "Progress Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Download Progress",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
     "/files/download/project/{project_id}": {
       "get": {
         "operationId": "download_project_files_files_download_project__project_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "direct",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Direct",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "progress_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-fA-F-]{16,64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Progress Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Project Files",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/files/download/project/{project_id}/confirm": {
+      "post": {
+        "description": "Same as confirm_file_downloaded, for a \"download all\" zip.",
+        "operationId": "confirm_project_downloaded_files_download_project__project_id__confirm_post",
         "parameters": [
           {
             "in": "path",
@@ -7506,7 +8367,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Download Project Files",
+        "summary": "Confirm Project Downloaded",
         "tags": [
           "Files"
         ]
@@ -7515,6 +8376,83 @@
     "/files/download/{filename}": {
       "get": {
         "operationId": "download_file_files_download__filename__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "filename",
+            "required": true,
+            "schema": {
+              "title": "Filename",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "direct",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Direct",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "progress_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-fA-F-]{16,64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Progress Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download File",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/files/download/{filename}/confirm": {
+      "post": {
+        "description": "Called by the client once it holds the complete file and has handed it\nto the browser to save - the only point a download is known to have worked.",
+        "operationId": "confirm_file_downloaded_files_download__filename__confirm_post",
         "parameters": [
           {
             "in": "path",
@@ -7555,7 +8493,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Download File",
+        "summary": "Confirm File Downloaded",
         "tags": [
           "Files"
         ]
@@ -8143,6 +9081,28 @@
             }
           },
           {
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "unpaid",
+                    "overdue",
+                    "paid",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "View"
+            }
+          },
+          {
             "in": "cookie",
             "name": "access_token",
             "required": false,
@@ -8378,6 +9338,60 @@
           }
         },
         "summary": "Get Latest Invoice For Project",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/invoices/summary": {
+      "get": {
+        "operationId": "get_summary_invoices_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tz_offset_minutes",
+            "required": false,
+            "schema": {
+              "default": 330,
+              "maximum": 840,
+              "minimum": -840,
+              "title": "Tz Offset Minutes",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Summary",
         "tags": [
           "Invoices"
         ]
@@ -9612,6 +10626,67 @@
         ]
       }
     },
+    "/list-options/{option_id}/pricing": {
+      "patch": {
+        "operationId": "update_pricing_list_options__option_id__pricing_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "option_id",
+            "required": true,
+            "schema": {
+              "title": "Option Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListOptionPricingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListOptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Pricing",
+        "tags": [
+          "List Options"
+        ]
+      }
+    },
     "/list-options/{option_id}/reactivate": {
       "patch": {
         "operationId": "reactivate_option_list_options__option_id__reactivate_patch",
@@ -9660,6 +10735,249 @@
         "summary": "Reactivate Option",
         "tags": [
           "List Options"
+        ]
+      }
+    },
+    "/notes/": {
+      "get": {
+        "operationId": "list_notes_notes__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "done"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Notes",
+        "tags": [
+          "Notes"
+        ]
+      },
+      "post": {
+        "operationId": "create_note_notes__post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Note",
+        "tags": [
+          "Notes"
+        ]
+      }
+    },
+    "/notes/{note_id}": {
+      "delete": {
+        "operationId": "delete_note_notes__note_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Note",
+        "tags": [
+          "Notes"
+        ]
+      },
+      "patch": {
+        "operationId": "update_note_notes__note_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Note",
+        "tags": [
+          "Notes"
         ]
       }
     },
@@ -10090,6 +11408,23 @@
                 }
               ],
               "title": "View"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "status_delivery",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order"
             }
           },
           {
@@ -11689,6 +13024,67 @@
           }
         },
         "summary": "Change Password",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/{user_id}/permissions": {
+      "put": {
+        "operationId": "update_user_permissions_users__user_id__permissions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPermissionsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update User Permissions",
         "tags": [
           "Users"
         ]

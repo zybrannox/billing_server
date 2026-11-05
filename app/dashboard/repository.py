@@ -110,11 +110,6 @@ def get_project_status_breakdown(db: Session) -> list[dict]:
     return [{"label": status or "Unknown", "count": count} for status, count in rows]
 
 
-def get_priority_breakdown(db: Session) -> list[dict]:
-    rows = db.query(Project.priority, func.count(Project.id)).group_by(Project.priority).all()
-    return [{"label": priority or "Unknown", "count": count} for priority, count in rows]
-
-
 # Default number of buckets shown per granularity - chosen so each reads
 # well on the chart (a 14-day sparkline, ~2 months of weeks, half a year of
 # months, or a 5-year run) without the caller having to know sane defaults.
@@ -193,8 +188,7 @@ def get_recent_invoices(db: Session, limit: int = 6):
 
 def get_attention_projects(db: Session, limit: int = 8):
     """Two independent reasons a project needs eyes on it:
-      1. Not yet delivered, and either Urgent or already past its delivery
-         date (the original rule).
+      1. Not yet delivered and already past its delivery date.
       2. Delivered *on credit* (Project.delivered_on_credit) whose invoice
          is still unpaid - this used to disappear from here entirely the
          moment it was delivered (the query required delivered_at IS NULL,
@@ -207,7 +201,7 @@ def get_attention_projects(db: Session, limit: int = 8):
     now = utcnow()
     not_yet_delivered = and_(
         Project.delivered_at.is_(None),
-        (Project.priority == "Urgent") | (Project.delivery_date < now),
+        Project.delivery_date < now,
     )
     credit_unpaid = and_(
         Project.delivered_on_credit.is_(True),

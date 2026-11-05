@@ -4,6 +4,7 @@ from passlib.hash import bcrypt
 from app.entities import User, UserRole
 from sqlalchemy.exc import IntegrityError
 from app.errors import BadRequest
+from app.bin.service import BinEntry, move_to_bin
 from app.projects.repository import get_all_projects
 from app.users.model import EmployeeStats, EmployeeProfile
 
@@ -159,13 +160,12 @@ class UserService:
         return user
 
     @staticmethod
-    def delete_user(db: Session, user_id: int):
+    def delete_user(db: Session, user_id: int, deleted_by: str):
         user = UserService.get_user_by_id(db, user_id)
         if not user:
             return False
 
-        db.delete(user)
-        db.commit()
+        move_to_bin(db, [BinEntry("employee", user, user.username, user.email)], deleted_by)
         return True
 
     @staticmethod

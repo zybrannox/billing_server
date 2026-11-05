@@ -11,7 +11,9 @@ Priority = Literal["Urgent", "High", "Normal"]
 class ProjectBase(BaseModel):
     project_type: str
     assigned_to: str
-    priority: Priority
+    # No longer asked for anywhere in the app; new work is simply Normal.
+    # Existing values stay stored untouched.
+    priority: Priority = "Normal"
     client_status: str
     print_status: str = "In Progress"
     start_date: UTCDateTime
@@ -49,9 +51,15 @@ class FileObject(BaseModel):
     width: Optional[float] = None
     height: Optional[float] = None
     # Server-side source of truth for "has this file been downloaded" - set
-    # by the /files/download endpoints so every user sees the same state,
-    # rather than tracking it per-browser on the client.
+    # by the /files/download/.../confirm endpoints (once the browser really
+    # has the file) so every user sees the same state, rather than tracking
+    # it per-browser on the client.
     downloaded: Optional[bool] = None
+    # Size of the original on disk; None once it no longer exists.
+    size_bytes: Optional[int] = None
+    # The file's real pixel size, for the preview; unknown for non-images.
+    pixel_width: Optional[int] = None
+    pixel_height: Optional[int] = None
     # Set once the weekly retention job (app/project_files/retention.py)
     # has permanently deleted the original from disk - null means it's
     # still there. The thumbnail and this row survive either way, so the
