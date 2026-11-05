@@ -10,11 +10,13 @@ from .dependencies import get_current_user
 INVOICE_CREATE = "invoice.create"
 INVOICE_EDIT = "invoice.edit"
 WORKSPACE_MANAGE = "workspace.manage"
+NOTES_ACCESS = "notes.access"
 
 PERMISSION_LABELS = {
     INVOICE_CREATE: "New invoices",
     INVOICE_EDIT: "Edit invoices",
     WORKSPACE_MANAGE: "Workspace settings",
+    NOTES_ACCESS: "Notes",
 }
 ALL_PERMISSIONS = tuple(PERMISSION_LABELS)
 
@@ -22,6 +24,7 @@ _DENIED = {
     INVOICE_CREATE: "You don't have access to create invoices. Ask an admin to give you access.",
     INVOICE_EDIT: "You don't have access to edit invoices. Ask an admin to give you access.",
     WORKSPACE_MANAGE: "You don't have access to workspace settings. Ask an admin to give you access.",
+    NOTES_ACCESS: "You don't have access to notes. Ask an admin to give you access.",
 }
 
 

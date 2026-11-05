@@ -8,6 +8,10 @@
 # scratch database it creates.
 set -euo pipefail
 
+# Same tools as backup_db.sh: an older pg_restore can't read a newer server's dump.
+PG_BIN="${PG_BIN:-/Library/PostgreSQL/18/bin}"
+[ -d "$PG_BIN" ] && PATH="$PG_BIN:$PATH"
+
 cd "$(dirname "$0")/.."
 if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
   DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2-)"
@@ -41,7 +45,13 @@ RESTORED="$(exact_counts "$SERVER_URL/$SCRATCH")"
 echo "restored from: $DUMP"
 if diff <(echo "$LIVE") <(echo "$RESTORED") >/dev/null; then
   echo "OK - every table's row count matches the live database"
+  RESULT=match
 else
   echo "Row counts differ (expected if data changed since the backup):"
   diff <(echo "$LIVE") <(echo "$RESTORED") || true
+  RESULT=differs
 fi
+
+# Only reached when the restore worked; the Backups page in System setup reads it.
+mkdir -p "$BACKUP_DIR"
+echo "$RESULT" > "$BACKUP_DIR/.last_restore_check"

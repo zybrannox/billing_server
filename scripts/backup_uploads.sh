@@ -18,4 +18,6 @@ UPLOADS_DIR="${UPLOADS_DIR:-uploads}"
 mkdir -p "$BACKUP_DIR/uploads"
 chmod 700 "$BACKUP_DIR"
 rsync -a "$UPLOADS_DIR/" "$BACKUP_DIR/uploads/"
+# When this last finished, for the Backups page in System setup.
+touch "$BACKUP_DIR/.last_uploads_copy"
 echo "copied $UPLOADS_DIR to $BACKUP_DIR/uploads ($(du -sh "$BACKUP_DIR/uploads" | cut -f1))"

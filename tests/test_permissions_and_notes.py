@@ -39,6 +39,13 @@ def employee(client, db):
     return user
 
 
+@pytest.fixture
+def note_taker(client, db):
+    user = _user(db, "ravi", permissions=["notes.access"])
+    _sign_in(client, user)
+    return user
+
+
 def _customer(db):
     customer = Customer(first_name="Meera", last_name="S", contact_number="9876543212")
     db.add(customer)
@@ -68,7 +75,9 @@ def _grant(db, user, *permissions):
 
 
 def test_admins_have_everything(client, admin):
-    assert set(client.get("/auth/me").json()["permissions"]) == {"invoice.create", "invoice.edit", "workspace.manage"}
+    assert set(client.get("/auth/me").json()["permissions"]) == {
+        "invoice.create", "invoice.edit", "workspace.manage", "notes.access",
+    }
 
 
 def test_employees_start_with_nothing(client, employee):
@@ -220,12 +229,12 @@ def _note(client, text="Flex banner 8x4 for Meera", **kw):
     return res.json()
 
 
-def test_any_employee_can_add_a_note(client, db, employee):
+def test_an_employee_with_access_can_add_a_note(client, db, note_taker):
     note = _note(client)
     assert (note["text"], note["created_by"], note["is_done"]) == ("Flex banner 8x4 for Meera", "ravi", False)
 
 
-def test_a_blank_note_is_refused(client, db, employee):
+def test_a_blank_note_is_refused(client, db, note_taker):
     assert client.post("/notes/", json={"text": "   "}).status_code == 422
 
 
@@ -233,13 +242,13 @@ def test_notes_need_a_login(client):
     assert client.get("/notes/").status_code == 401
 
 
-def test_a_note_can_have_a_customer(client, db, employee):
+def test_a_note_can_have_a_customer(client, db, note_taker):
     customer = _customer(db)
     assert _note(client, customer_id=customer.id)["customer_name"] == "Meera S"
     assert client.post("/notes/", json={"text": "x", "customer_id": 9999}).status_code == 404
 
 
-def test_clicking_done_records_who_and_when_and_clicking_again_undoes_it(client, db, employee):
+def test_clicking_done_records_who_and_when_and_clicking_again_undoes_it(client, db, note_taker):
     note = _note(client)
     done = client.patch(f"/notes/{note['id']}", json={"is_done": True}).json()
     assert done["is_done"] is True
@@ -252,12 +261,12 @@ def test_clicking_done_records_who_and_when_and_clicking_again_undoes_it(client,
     assert undone["done_at"] is None
 
 
-def test_notes_can_be_edited(client, db, employee):
+def test_notes_can_be_edited(client, db, note_taker):
     note = _note(client)
     assert client.patch(f"/notes/{note['id']}", json={"text": "Changed"}).json()["text"] == "Changed"
 
 
-def test_whats_still_to_do_comes_first_with_counts(client, db, employee):
+def test_whats_still_to_do_comes_first_with_counts(client, db, note_taker):
     first, second, third = _note(client, "first"), _note(client, "second"), _note(client, "third")
     client.patch(f"/notes/{third['id']}", json={"is_done": True})
 
@@ -269,8 +278,8 @@ def test_whats_still_to_do_comes_first_with_counts(client, db, employee):
     assert client.get("/notes/?status=done").json()["open_count"] == 2
 
 
-def test_a_note_can_become_an_invoice_and_shows_its_number(client, db, employee):
-    _grant(db, employee, "invoice.create")
+def test_a_note_can_become_an_invoice_and_shows_its_number(client, db, note_taker):
+    _grant(db, note_taker, "notes.access", "invoice.create")
     customer = _customer(db)
     note = _note(client)
     res = client.post("/invoices/", json={"new_project": {"customer_id": customer.id}, "note_id": note["id"], "items": [LINE]})
@@ -281,8 +290,8 @@ def test_a_note_can_become_an_invoice_and_shows_its_number(client, db, employee)
     assert item["invoice_number"] == res.json()["invoice_number"]
 
 
-def test_a_note_cant_be_billed_twice(client, db, employee):
-    _grant(db, employee, "invoice.create")
+def test_a_note_cant_be_billed_twice(client, db, note_taker):
+    _grant(db, note_taker, "notes.access", "invoice.create")
     customer = _customer(db)
     note = _note(client)
     payload = {"new_project": {"customer_id": customer.id}, "note_id": note["id"], "items": [LINE]}
@@ -292,7 +301,7 @@ def test_a_note_cant_be_billed_twice(client, db, employee):
     assert "already" in res.json()["detail"]
 
 
-def test_billing_a_note_needs_invoice_access(client, db, employee):
+def test_billing_a_note_needs_invoice_access(client, db, note_taker):
     customer = _customer(db)
     note = _note(client)
     res = client.post("/invoices/", json={"new_project": {"customer_id": customer.id}, "note_id": note["id"], "items": [LINE]})

@@ -4,11 +4,15 @@
 #
 #   0 2 * * *  /path/to/billing_server/scripts/backup_db.sh
 #
-# Needs pg_dump on PATH and DATABASE_URL (read from .env if not set). A backup
-# you have never restored is only a hope - run scripts/verify_restore.sh
-# regularly (it restores the newest dump into a throw-away database and checks
-# the row counts).
+# Needs pg_dump and DATABASE_URL (read from .env if not set). A backup you have
+# never restored is only a hope - run scripts/verify_restore.sh regularly (it
+# restores the newest dump into a throw-away database and checks the row counts).
 set -euo pipefail
+
+# pg_dump refuses a server newer than itself, so the server's own tools go ahead
+# of any older copy on PATH (Homebrew's, say). Set PG_BIN after a Postgres upgrade.
+PG_BIN="${PG_BIN:-/Library/PostgreSQL/18/bin}"
+[ -d "$PG_BIN" ] && PATH="$PG_BIN:$PATH"
 
 cd "$(dirname "$0")/.."
 if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then

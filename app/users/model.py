@@ -27,7 +27,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-Permission = Literal["invoice.create", "invoice.edit", "workspace.manage"]
+Permission = Literal["invoice.create", "invoice.edit", "workspace.manage", "notes.access"]
 
 
 class UserPermissionsUpdate(BaseModel):

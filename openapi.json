@@ -274,6 +274,99 @@
         "title": "AuditLogRead",
         "type": "object"
       },
+      "BackupStatusRead": {
+        "properties": {
+          "backup_count": {
+            "title": "Backup Count",
+            "type": "integer"
+          },
+          "last_backup_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Backup At"
+          },
+          "last_backup_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Backup Size Bytes"
+          },
+          "last_restore_check_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Restore Check At"
+          },
+          "last_restore_check_matched": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Restore Check Matched"
+          },
+          "on_separate_disk": {
+            "title": "On Separate Disk",
+            "type": "boolean"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "scheduled": {
+            "title": "Scheduled",
+            "type": "boolean"
+          },
+          "total_size_bytes": {
+            "title": "Total Size Bytes",
+            "type": "integer"
+          },
+          "uploads_last_copied_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploads Last Copied At"
+          }
+        },
+        "required": [
+          "last_backup_at",
+          "last_backup_size_bytes",
+          "backup_count",
+          "total_size_bytes",
+          "overdue",
+          "scheduled",
+          "on_separate_disk",
+          "last_restore_check_at",
+          "last_restore_check_matched",
+          "uploads_last_copied_at"
+        ],
+        "title": "BackupStatusRead",
+        "type": "object"
+      },
       "BinItemRead": {
         "properties": {
           "deleted_at": {
@@ -5902,7 +5995,8 @@
               "enum": [
                 "invoice.create",
                 "invoice.edit",
-                "workspace.manage"
+                "workspace.manage",
+                "notes.access"
               ],
               "type": "string"
             },
@@ -6506,6 +6600,90 @@
         "summary": "Reset Password",
         "tags": [
           "Auth"
+        ]
+      }
+    },
+    "/backups": {
+      "get": {
+        "operationId": "get_backup_status_backups_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Backup Status",
+        "tags": [
+          "Backups"
+        ]
+      }
+    },
+    "/backups/run": {
+      "post": {
+        "operationId": "run_backup_backups_run_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Backup",
+        "tags": [
+          "Backups"
         ]
       }
     },

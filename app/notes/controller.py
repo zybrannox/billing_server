@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth.dependencies import get_current_user
+from app.auth.permissions import NOTES_ACCESS, require_permission
 from app.bin.service import BinEntry, move_to_bin
 from app.database import get_db
 from app.datetime_utils import utcnow
@@ -34,7 +34,7 @@ def list_notes(
     page_size: int = Query(50, ge=1, le=100),
     status: Optional[NoteStatus] = None,
     db: Session = Depends(get_db),
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(require_permission(NOTES_ACCESS)),
 ):
     query = db.query(Note).options(joinedload(Note.customer), joinedload(Note.invoice))
     if status:
@@ -52,7 +52,7 @@ def list_notes(
 
 
 @router.post("/", response_model=NoteRead)
-def create_note(payload: NoteCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def create_note(payload: NoteCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_permission(NOTES_ACCESS))):
     _customer_must_exist(db, payload.customer_id)
     note = Note(text=payload.text, customer_id=payload.customer_id, created_by=current_user["username"])
     db.add(note)
@@ -66,7 +66,7 @@ def update_note(
     note_id: int,
     payload: NoteUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission(NOTES_ACCESS)),
 ):
     note = _note(db, note_id)
     fields = payload.model_fields_set
@@ -87,7 +87,7 @@ def update_note(
 
 
 @router.delete("/{note_id}")
-def delete_note(note_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def delete_note(note_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_permission(NOTES_ACCESS))):
     note = _note(db, note_id)
     first_line = note.text.splitlines()[0] if note.text else f"Note #{note_id}"
     move_to_bin(db, [BinEntry("note", note, first_line[:120], note.customer_name)], current_user["username"])
