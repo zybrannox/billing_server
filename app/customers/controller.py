@@ -29,11 +29,12 @@ def get_customers(
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
     sort: Literal["name", "most_used"] = Query("name"),
+    exclude_placeholders: bool = False,
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
     items, total = CustomerService.get_all_customers(
-        db, page=page, page_size=page_size, search=search, sort=sort
+        db, page=page, page_size=page_size, search=search, sort=sort, exclude_placeholders=exclude_placeholders
     )
     total_pages = page_count(total, page_size)
     return CustomerListResponse(

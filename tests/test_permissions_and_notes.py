@@ -76,7 +76,7 @@ def _grant(db, user, *permissions):
 
 def test_admins_have_everything(client, admin):
     assert set(client.get("/auth/me").json()["permissions"]) == {
-        "invoice.create", "invoice.edit", "workspace.manage", "notes.access",
+        "invoice.edit", "workspace.manage", "notes.access",
     }
 
 
@@ -92,28 +92,35 @@ def test_employees_see_what_they_were_granted(client, db, employee):
 # --- new invoices -----------------------------------------------------------------
 
 
-def test_new_invoice_is_refused_without_access(client, db, employee):
+def test_any_employee_can_create_an_invoice(client, db, employee):
     res = client.post("/invoices/", json={"project_id": _project(db).id, "items": [LINE]})
-    assert res.status_code == 403
-    assert "Ask an admin" in res.json()["detail"]
-    assert db.query(Invoice).count() == 0
+    assert res.status_code == 200, res.text
+    assert db.query(Invoice).count() == 1
 
 
-def test_new_invoice_works_with_access(client, db, employee):
-    _grant(db, employee, "invoice.create")
-    assert client.post("/invoices/", json={"project_id": _project(db).id, "items": [LINE]}).status_code == 200
+def test_any_employee_can_view_a_projects_invoice(client, db, employee):
+    invoice = _invoice(db)
+    assert client.get(f"/invoices/project/{invoice.project_id}/latest").status_code == 200
+    assert client.get(f"/invoices/{invoice.id}/details").status_code == 200
 
 
-def test_access_can_be_taken_away_again(client, db, employee):
-    _grant(db, employee, "invoice.create")
+def test_only_admins_can_browse_or_search_all_invoices(client, db, employee):
+    _grant(db, employee, "invoice.edit", "workspace.manage", "notes.access")
+    assert client.get("/invoices/").status_code == 403
+    assert client.get("/invoices/summary").status_code == 403
+
+
+def test_edit_access_can_be_taken_away_again(client, db, employee):
+    invoice = _invoice(db)
+    _grant(db, employee, "invoice.edit")
     _grant(db, employee)
-    assert client.post("/invoices/", json={"project_id": _project(db).id, "items": [LINE]}).status_code == 403
+    assert client.patch(f"/invoices/{invoice.id}", json={"items": [LINE]}).status_code == 403
 
 
-def test_a_quotation_cant_be_converted_without_access(client, db, employee):
+def test_any_employee_can_convert_a_quotation(client, db, employee):
     now = utcnow().isoformat() + "Z"
     res = client.post("/quotations/1/convert", json={"assigned_to": "a", "client_status": "Confirmed", "start_date": now, "delivery_date": now})
-    assert res.status_code == 403
+    assert res.status_code == 404
 
 
 def test_finishing_a_design_still_works_without_invoice_access(client, db, employee):
@@ -129,10 +136,9 @@ def test_editing_is_refused_without_access(client, db, employee):
     assert client.patch(f"/invoices/{invoice.id}", json={"items": [LINE]}).status_code == 403
 
 
-def test_create_access_doesnt_include_edit(client, db, employee):
-    invoice = _invoice(db)
-    _grant(db, employee, "invoice.create")
-    assert client.patch(f"/invoices/{invoice.id}", json={"items": [LINE]}).status_code == 403
+def test_new_invoices_cant_be_granted_any_more(client, db, admin):
+    employee = _user(db, "ravi")
+    assert client.put(f"/users/{employee.id}/permissions", json={"permissions": ["invoice.create"]}).status_code == 422
 
 
 def test_editing_works_with_access(client, db, employee):
@@ -157,7 +163,7 @@ def test_admin_can_still_cancel(client, db, admin):
 
 def test_edit_access_doesnt_allow_deleting(client, db, employee):
     invoice = _invoice(db)
-    _grant(db, employee, "invoice.edit", "invoice.create", "workspace.manage")
+    _grant(db, employee, "invoice.edit", "workspace.manage")
     assert client.delete(f"/invoices/{invoice.id}").status_code == 403
 
 
@@ -188,7 +194,7 @@ def test_workspace_settings_work_with_access(client, db, employee):
     ("put", "/users/1/permissions"),
 ])
 def test_workspace_access_doesnt_reach_the_admin_only_sections(client, db, employee, method, path):
-    _grant(db, employee, "workspace.manage", "invoice.create", "invoice.edit")
+    _grant(db, employee, "workspace.manage", "invoice.edit")
     kwargs = {"json": {"permissions": ["workspace.manage"]}} if method == "put" else {}
     assert getattr(client, method)(path, **kwargs).status_code == 403
 
@@ -201,14 +207,14 @@ def test_admin_grants_and_the_log_says_so(client, db, admin):
     db.query(AuditLog).delete()
     db.commit()
 
-    res = client.put(f"/users/{employee.id}/permissions", json={"permissions": ["invoice.edit", "invoice.create"]})
+    res = client.put(f"/users/{employee.id}/permissions", json={"permissions": ["notes.access", "invoice.edit"]})
     assert res.status_code == 200
-    assert res.json()["permissions"] == ["invoice.create", "invoice.edit"]
+    assert res.json()["permissions"] == ["invoice.edit", "notes.access"]
 
     entry = client.get("/audit-log/").json()["items"][0]
     assert (entry["action"], entry["actor"]) == ("user.update", "boss")
     change = entry["detail"]["changes"][0]
-    assert (change["label"], change["from"], change["to"]) == ("Access", "None", "New invoices, Edit invoices")
+    assert (change["label"], change["from"], change["to"]) == ("Access", "None", "Edit project invoices, Notes")
 
 
 def test_an_employee_cant_grant_themselves_access(client, db, employee):
@@ -279,7 +285,6 @@ def test_whats_still_to_do_comes_first_with_counts(client, db, note_taker):
 
 
 def test_a_note_can_become_an_invoice_and_shows_its_number(client, db, note_taker):
-    _grant(db, note_taker, "notes.access", "invoice.create")
     customer = _customer(db)
     note = _note(client)
     res = client.post("/invoices/", json={"new_project": {"customer_id": customer.id}, "note_id": note["id"], "items": [LINE]})
@@ -291,7 +296,6 @@ def test_a_note_can_become_an_invoice_and_shows_its_number(client, db, note_take
 
 
 def test_a_note_cant_be_billed_twice(client, db, note_taker):
-    _grant(db, note_taker, "notes.access", "invoice.create")
     customer = _customer(db)
     note = _note(client)
     payload = {"new_project": {"customer_id": customer.id}, "note_id": note["id"], "items": [LINE]}
@@ -301,12 +305,11 @@ def test_a_note_cant_be_billed_twice(client, db, note_taker):
     assert "already" in res.json()["detail"]
 
 
-def test_billing_a_note_needs_invoice_access(client, db, note_taker):
+def test_billing_a_note_needs_no_extra_access(client, db, note_taker):
     customer = _customer(db)
     note = _note(client)
     res = client.post("/invoices/", json={"new_project": {"customer_id": customer.id}, "note_id": note["id"], "items": [LINE]})
-    assert res.status_code == 403
-    assert db.get(Note, note["id"]).invoice_id is None
+    assert res.status_code == 200, res.text
 
 
 def test_deleting_a_note_goes_to_the_bin_and_can_be_restored(client, db, admin):

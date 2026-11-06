@@ -14,6 +14,11 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def to_naive_utc(dt: datetime) -> datetime:
+    """A value from the API in the form every DateTime column stores: naive UTC."""
+    return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
+
 def _as_utc_iso(dt: Optional[datetime]) -> Optional[str]:
     # Every DateTime column in this app is naive (no timezone=True), but
     # every value written to one is a UTC wall-clock reading -

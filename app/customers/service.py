@@ -49,11 +49,15 @@ class CustomerService:
         page_size: int = 20,
         search: str | None = None,
         sort: str = "name",
+        exclude_placeholders: bool = False,
     ):
         # Always paginated - both the admin Customers table and the Add
         # Project search dropdown call this with a small page_size, so
         # neither ever pulls the full customer table into memory/network.
         query = db.query(Customer)
+
+        if exclude_placeholders:
+            query = query.filter(Customer.is_placeholder.is_(False))
 
         if search:
             like = f"%{search}%"

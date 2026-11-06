@@ -3852,6 +3852,26 @@
         "title": "MinCharge",
         "type": "object"
       },
+      "NewCustomer": {
+        "description": "A customer typed straight into the Add Project form.",
+        "properties": {
+          "contact_number": {
+            "title": "Contact Number",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "contact_number"
+        ],
+        "title": "NewCustomer",
+        "type": "object"
+      },
       "NoteCreate": {
         "properties": {
           "customer_id": {
@@ -4291,6 +4311,16 @@
               }
             ],
             "title": "Description"
+          },
+          "new_customer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NewCustomer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "print_status": {
             "default": "In Progress",
@@ -5993,7 +6023,6 @@
           "permissions": {
             "items": {
               "enum": [
-                "invoice.create",
                 "invoice.edit",
                 "workspace.manage",
                 "notes.access"
@@ -7610,6 +7639,16 @@
               ],
               "title": "Sort",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_placeholders",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Exclude Placeholders",
+              "type": "boolean"
             }
           },
           {

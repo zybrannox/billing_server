@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.audit import record_audit
-from app.auth.permissions import INVOICE_CREATE, INVOICE_EDIT, require_invoice_access, require_permission
+from app.auth.permissions import INVOICE_EDIT, require_permission
 from app.entities import Invoice
 from app.errors import NotFound
 from app.auth.dependencies import require_admin, get_current_user
@@ -45,7 +45,7 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 # existing invoice's status - stays admin-only.
 
 @router.post("/", response_model=InvoiceRead)
-def create(payload: InvoiceCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_permission(INVOICE_CREATE))):
+def create(payload: InvoiceCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     return service_create(db, payload, current_user["username"])
 
 @router.get("/", response_model=InvoiceListResponse)
@@ -57,7 +57,7 @@ def list_invoices(
     company_id: int | None = Query(None),
     view: InvoiceView | None = Query(None),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_invoice_access),
+    _admin: dict = Depends(require_admin),
 ):
     return service_list(
         db, page=page, page_size=page_size, search=search, customer_id=customer_id, company_id=company_id, view=view
@@ -69,7 +69,7 @@ def list_invoices(
 def get_summary(
     tz_offset_minutes: int = Query(330, ge=-840, le=840),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_invoice_access),
+    _admin: dict = Depends(require_admin),
 ):
     return get_invoice_summary(db, tz_offset_minutes)
 

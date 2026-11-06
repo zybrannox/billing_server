@@ -1,5 +1,5 @@
 from datetime import timedelta
-from app.datetime_utils import utcnow
+from app.datetime_utils import to_naive_utc, utcnow
 from sqlalchemy import and_, case, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.entities.project import Project
@@ -12,8 +12,13 @@ from .model import ProjectCreate, ProjectUpdate
 ONGOING_VIEW_RETENTION_DAYS = 7
 
 
-def create_project(db: Session, project: ProjectCreate):
-    new_project = Project(**project.dict())
+def create_project(db: Session, project: ProjectCreate, customer_id: int | None):
+    new_project = Project(
+        **project.model_dump(exclude={"customer_id", "new_customer", "start_date", "delivery_date"}),
+        customer_id=customer_id,
+        start_date=to_naive_utc(project.start_date),
+        delivery_date=to_naive_utc(project.delivery_date),
+    )
     db.add(new_project)
     db.commit()
     db.refresh(new_project)

@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.audit import record_audit
-from app.auth.permissions import INVOICE_CREATE, require_permission
 from app.entities import Quotation
 from app.auth.dependencies import require_admin, get_current_user
 from app.invoices.model import InvoiceRead
@@ -80,7 +79,7 @@ def convert_to_invoice(
     quotation_id: int,
     payload: QuotationConvertRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_permission(INVOICE_CREATE)),
+    current_user: dict = Depends(get_current_user),
 ):
     return service_convert(db, quotation_id, payload, current_user["username"])
 

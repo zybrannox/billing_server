@@ -1,7 +1,8 @@
 from app.pagination import page_count
 from sqlalchemy.orm import Session, selectinload
 from fastapi import HTTPException
-from app.errors import NotFound
+from app.entities.customer import Customer
+from app.errors import BadRequest, NotFound
 from app.entities.project import Project
 from app.invoices.repository import get_latest_invoice_for_project
 from .repository import (
@@ -15,12 +16,37 @@ from .repository import (
     mark_notified,
     toggle_pin,
 )
-from .model import ProjectCreate, ProjectUpdate, ProjectListResponse
+from .model import NewCustomer, ProjectCreate, ProjectUpdate, ProjectListResponse
 from app.bin.service import BinEntry, move_to_bin
 
 
+def _customer_from_form(db: Session, new_customer: NewCustomer) -> Customer:
+    """The customer just typed in, reusing them when the same name and number are
+    already saved. A shared number alone isn't enough: several real customers
+    have one. Only flushed, so it commits or fails together with the project."""
+    same_number = db.query(Customer).filter(
+        Customer.contact_number == new_customer.contact_number,
+        Customer.is_placeholder.is_(False),
+    )
+    for customer in same_number:
+        if " ".join(f"{customer.first_name} {customer.last_name}".split()).casefold() == new_customer.name.casefold():
+            return customer
+
+    first_name, _, last_name = new_customer.name.partition(" ")
+    customer = Customer(first_name=first_name, last_name=last_name, contact_number=new_customer.contact_number)
+    db.add(customer)
+    db.flush()
+    return customer
+
+
 def service_create(db: Session, payload: ProjectCreate):
-    return create_project(db, payload)
+    if payload.new_customer:
+        return create_project(db, payload, _customer_from_form(db, payload.new_customer).id)
+    if payload.customer_id:
+        customer = db.get(Customer, payload.customer_id)
+        if customer and customer.is_placeholder:
+            raise BadRequest("Pick a real customer, or enter their name and phone number.")
+    return create_project(db, payload, payload.customer_id)
 
 
 def service_get(db: Session, project_id: int):

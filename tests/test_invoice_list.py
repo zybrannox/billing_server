@@ -117,17 +117,11 @@ def test_an_advance_bigger_than_the_invoice_owes_nothing(client, db, admin):
     assert client.get("/invoices/summary").json()["total_outstanding"] == 0
 
 
-@pytest.mark.parametrize("permissions,allowed", [
-    ((), False),
-    (("workspace.manage",), False),
-    (("invoice.create",), True),
-    (("invoice.edit",), True),
-])
-def test_only_staff_with_invoice_access_can_browse_invoices(client, db, permissions, allowed):
+@pytest.mark.parametrize("permissions", [(), ("workspace.manage",), ("invoice.edit",), ("notes.access",)])
+def test_only_admins_can_browse_invoices(client, db, permissions):
     _sign_in(client, db, "ravi", permissions=permissions)
-    expected = 200 if allowed else 403
-    assert client.get("/invoices/").status_code == expected
-    assert client.get("/invoices/summary").status_code == expected
+    assert client.get("/invoices/").status_code == 403
+    assert client.get("/invoices/summary").status_code == 403
 
 
 def test_customer_list_says_how_many_invoices_each_has(client, db, admin):

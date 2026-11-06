@@ -60,7 +60,7 @@ def test_backups_need_a_login(client):
 @pytest.mark.parametrize("method,path", [("get", "/backups"), ("post", "/backups/run")])
 def test_an_employee_is_refused_whatever_else_they_can_do(client, db, folder, monkeypatch, method, path):
     calls = _succeed(monkeypatch, folder)
-    _sign_in(client, db, "ravi", permissions=["invoice.create", "invoice.edit", "workspace.manage", "notes.access"])
+    _sign_in(client, db, "ravi", permissions=["invoice.edit", "workspace.manage", "notes.access"])
     assert getattr(client, method)(path).status_code == 403
     assert calls == []
 
@@ -159,7 +159,7 @@ def test_backing_up_is_rate_limited(client, folder, admin, monkeypatch):
 
 
 def test_notes_need_their_own_access(client, db):
-    _sign_in(client, db, "ravi", permissions=["invoice.create", "workspace.manage"])
+    _sign_in(client, db, "ravi", permissions=["invoice.edit", "workspace.manage"])
     assert client.get("/notes/").status_code == 403
     assert client.post("/notes/", json={"text": "x"}).status_code == 403
     assert client.patch("/notes/1", json={"is_done": True}).status_code == 403
