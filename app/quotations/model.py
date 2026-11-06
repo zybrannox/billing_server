@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Literal, Optional
 from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
+from app.new_customer import NewCustomer
 from app.response_model import ResponseModel
 from app.projects.model import Priority
 from app.invoices.model import MeasurementUnit
@@ -44,7 +45,9 @@ class QuotationItemRead(ResponseModel):
 
 
 class QuotationCreate(BaseModel):
-    customer_id: int
+    # Exactly one: someone already saved, or someone typed in on this screen.
+    customer_id: Optional[int] = None
+    new_customer: Optional[NewCustomer] = None
     project_type: str
     valid_until: OptionalUTCDateTime = None
     items: List[QuotationItemCreate]
@@ -56,6 +59,12 @@ class QuotationCreate(BaseModel):
         if not v:
             raise ValueError("A quotation needs at least one line item")
         return v
+
+    @model_validator(mode="after")
+    def exactly_one_customer(self):
+        if bool(self.customer_id) == bool(self.new_customer):
+            raise ValueError("Pick an existing customer or enter a new one")
+        return self
 
 
 # Body for PATCH /quotations/{id}/status - deliberately narrow (just the

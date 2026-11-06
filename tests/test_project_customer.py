@@ -1,4 +1,4 @@
-"""Adding a project: a new customer can be typed in, and the catch-all customer is gone."""
+"""New work: a new customer can be typed in, and the catch-all customer is gone."""
 from datetime import datetime
 
 import pytest
@@ -139,3 +139,87 @@ def test_older_projects_keep_the_catch_all_customer(client, db, employee):
     assert client.put(f"/projects/{project.id}", json={"description": "Changed"}).status_code == 200
     db.refresh(project)
     assert project.customer_id == unknown.id
+
+
+# --- Create Invoice and Create Quotation ------------------------------------------------
+
+LINE = {"description": "Banner", "width": 8, "height": 4, "rate": 10, "pieces": 2, "unit": "ft"}
+
+
+def _invoice(client, **customer):
+    return client.post("/invoices/", json={"new_project": {"project_type": "Flex", **customer}, "items": [LINE]})
+
+
+def _quotation(client, **customer):
+    return client.post("/quotations/", json={"project_type": "Flex", "items": [LINE], **customer})
+
+
+@pytest.mark.parametrize("create", [_invoice, _quotation])
+def test_a_new_customer_can_be_typed_in(client, db, employee, create):
+    res = create(client, **_new(phone="98765 43210"))
+    assert res.status_code == 200, res.text
+    customer = db.query(Customer).one()
+    assert (customer.first_name, customer.last_name, customer.contact_number) == ("Meera", "Suresh", "9876543210")
+
+
+def test_the_invoice_is_for_the_customer_typed_in(client, db, employee):
+    invoice = _invoice(client, **_new()).json()
+    project = db.get(Project, invoice["project_id"])
+    assert project.customer.first_name == "Meera"
+
+
+def test_the_quotation_is_for_the_customer_typed_in(client, db, employee):
+    quotation = _quotation(client, **_new()).json()
+    assert quotation["customer_id"] == db.query(Customer).one().id
+
+
+@pytest.mark.parametrize("create", [_invoice, _quotation])
+def test_the_same_person_isnt_added_twice_when_billing(client, db, employee, create):
+    existing = _customer(db, "Meera", "Suresh")
+    assert create(client, **_new(name="MEERA suresh")).status_code == 200
+    assert db.query(Customer).one().id == existing.id
+
+
+@pytest.mark.parametrize("create", [_invoice, _quotation])
+def test_the_catch_all_customer_is_refused_when_billing(client, db, employee, create):
+    unknown = _customer(db, "UNKOWN", " NAME", "9999999999", placeholder=True)
+    res = create(client, customer_id=unknown.id)
+    assert res.status_code == 400
+    assert "real customer" in res.json()["detail"]
+
+
+@pytest.mark.parametrize("create", [_invoice, _quotation])
+def test_billing_needs_exactly_one_customer(client, db, employee, create):
+    existing = _customer(db)
+    assert create(client).status_code == 422
+    assert create(client, customer_id=existing.id, **_new()).status_code == 422
+
+
+@pytest.mark.parametrize("create", [_invoice, _quotation])
+def test_picking_a_saved_customer_still_works_when_billing(client, db, employee, create):
+    assert create(client, customer_id=_customer(db).id).status_code == 200
+
+
+@pytest.mark.parametrize("create", [_invoice, _quotation])
+def test_a_bad_phone_number_is_refused_when_billing(client, db, employee, create):
+    assert create(client, **_new(phone="123")).status_code == 422
+    assert db.query(Customer).count() == 0
+
+
+def test_a_failed_invoice_doesnt_leave_a_new_customer_behind(client, db, employee):
+    res = client.post("/invoices/", json={
+        "new_project": _new(), "items": [LINE], "discount_amount": 999999,
+    })
+    assert res.status_code == 400
+    db.expire_all()
+    assert db.query(Customer).count() == 0
+
+
+def test_older_projects_with_the_catch_all_customer_can_still_be_invoiced(client, db, employee):
+    unknown = _customer(db, "UNKOWN", " NAME", "9999999999", placeholder=True)
+    now = utcnow()
+    project = Project(project_type="Flex", assigned_to="ravi", priority="Normal", client_status="Confirmed",
+                      print_status="In Progress", start_date=now, delivery_date=now, customer_id=unknown.id)
+    db.add(project)
+    db.commit()
+    assert client.post("/invoices/", json={"project_id": project.id, "items": [LINE]}).status_code == 200

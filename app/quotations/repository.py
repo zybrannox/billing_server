@@ -2,6 +2,7 @@ from app.pagination import paginate
 from app.datetime_utils import utcnow
 from sqlalchemy.orm import Session, joinedload
 from app.entities.quotation import Quotation
+from app.new_customer import customer_from_form
 from app.entities.quotation_item import QuotationItem
 from app.entities.customer import Customer
 from app.entities.project import Project
@@ -19,7 +20,7 @@ def get_customer(db: Session, customer_id: int):
 def create_quotation(db: Session, payload: QuotationCreate):
     try:
         new_quotation = Quotation(
-            customer_id=payload.customer_id,
+            customer_id=customer_from_form(db, payload.new_customer).id if payload.new_customer else payload.customer_id,
             project_type=payload.project_type,
             valid_until=payload.valid_until,
             status="pending",

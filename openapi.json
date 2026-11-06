@@ -507,6 +507,20 @@
         "title": "Body_create_quotation_share_link_quotations__quotation_id__share_link_post",
         "type": "object"
       },
+      "Body_print_invoice_invoices__invoice_id__print_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_print_invoice_invoices__invoice_id__print_post",
+        "type": "object"
+      },
       "Body_upload_chunk_files_upload_chunk_post": {
         "properties": {
           "chunk": {
@@ -2881,8 +2895,25 @@
       "InvoiceNewProject": {
         "properties": {
           "customer_id": {
-            "title": "Customer Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "new_customer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NewCustomer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "project_type": {
             "anyOf": [
@@ -2896,9 +2927,6 @@
             "title": "Project Type"
           }
         },
-        "required": [
-          "customer_id"
-        ],
         "title": "InvoiceNewProject",
         "type": "object"
       },
@@ -3853,7 +3881,6 @@
         "type": "object"
       },
       "NewCustomer": {
-        "description": "A customer typed straight into the Add Project form.",
         "properties": {
           "contact_number": {
             "title": "Contact Number",
@@ -5002,8 +5029,15 @@
       "QuotationCreate": {
         "properties": {
           "customer_id": {
-            "title": "Customer Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
           },
           "discount_amount": {
             "default": 0,
@@ -5017,6 +5051,16 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "new_customer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NewCustomer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "project_type": {
             "title": "Project Type",
@@ -5036,7 +5080,6 @@
           }
         },
         "required": [
-          "customer_id",
           "project_type",
           "items"
         ],
@@ -9933,6 +9976,65 @@
           }
         },
         "summary": "Get Invoice Payments",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/invoices/{invoice_id}/print": {
+      "post": {
+        "operationId": "print_invoice_invoices__invoice_id__print_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "title": "Invoice Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_print_invoice_invoices__invoice_id__print_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Print Invoice",
         "tags": [
           "Invoices"
         ]

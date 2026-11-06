@@ -4,6 +4,7 @@ from app.datetime_utils import utcnow
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.errors import NotFound, BadRequest
+from app.new_customer import refuse_placeholder
 from app.entities.project import Project
 from app.entities.customer import Customer
 from app.customers.billing import customer_bill_to
@@ -52,9 +53,11 @@ def service_create(db: Session, payload: InvoiceCreate, username: str):
     else:
         # new_project path - same up-front check, against the customer this
         # brand-new project/invoice would belong to instead of a project id.
-        customer_exists = db.query(Customer.id).filter(Customer.id == payload.new_project.customer_id).first()
-        if not customer_exists:
-            raise NotFound("Customer")
+        if payload.new_project.customer_id:
+            customer = db.get(Customer, payload.new_project.customer_id)
+            if not customer:
+                raise NotFound("Customer")
+            refuse_placeholder(customer)
 
     subtotal = compute_invoice_total(payload.items)
 

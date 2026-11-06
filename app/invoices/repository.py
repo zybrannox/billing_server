@@ -12,6 +12,7 @@ from app.entities.customer import Customer
 from app.entities.company import Company
 from app.entities.note import Note
 from app.bin.service import BinEntry, move_to_bin
+from app.new_customer import customer_from_form
 from .calculations import compute_line
 from .model import InvoiceCreate, InvoiceUpdate
 
@@ -74,7 +75,11 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
             new_project = Project(
                 # Everywhere that lists projects expects one to have a type.
                 project_type=(payload.new_project.project_type or "").strip() or DEFAULT_JOB_TYPE,
-                customer_id=payload.new_project.customer_id,
+                customer_id=(
+                    customer_from_form(db, payload.new_project.new_customer).id
+                    if payload.new_project.new_customer
+                    else payload.new_project.customer_id
+                ),
                 # Not asked for on the invoice screen (see InvoiceNewProject)
                 # - this project exists purely to hang the invoice off of,
                 # not to be scheduled or assigned like ordinary tracked

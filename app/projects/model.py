@@ -1,9 +1,8 @@
-import re
-
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, model_validator
 from typing import Literal, Optional, List
 from datetime import datetime
 from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
+from app.new_customer import NewCustomer
 
 # Low was removed as a priority tier entirely (not just hidden in the UI) -
 # reject it at the API boundary rather than relying on the frontend alone.
@@ -22,31 +21,6 @@ class ProjectBase(BaseModel):
     delivery_date: UTCDateTime
     description: Optional[str] = None
     customer_id: Optional[int] = None
-
-
-class NewCustomer(BaseModel):
-    """A customer typed straight into the Add Project form."""
-
-    name: str = Field(max_length=100)
-    contact_number: str
-
-    @field_validator("name")
-    @classmethod
-    def name_is_tidy(cls, value: str) -> str:
-        name = " ".join(value.split())
-        if not name:
-            raise ValueError("Enter the customer's name")
-        return name
-
-    # Same rule as the customers table's own check, after dropping what people
-    # naturally type between the digits.
-    @field_validator("contact_number")
-    @classmethod
-    def phone_is_valid(cls, value: str) -> str:
-        phone = re.sub(r"[\s()-]", "", value)
-        if not re.fullmatch(r"\+?[0-9]{10,15}", phone) or len(phone) > 15:
-            raise ValueError("Enter a valid phone number")
-        return phone
 
 
 class ProjectCreate(ProjectBase):

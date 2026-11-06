@@ -2,6 +2,7 @@ from app.pagination import page_count
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.errors import NotFound
+from app.new_customer import refuse_placeholder
 from app.customers.billing import customer_bill_to
 from .calculations import compute_quotation_total
 from .repository import (
@@ -17,9 +18,11 @@ from .model import QuotationCreate, QuotationListResponse, QuotationConvertReque
 
 
 def service_create(db: Session, payload: QuotationCreate):
-    customer = get_customer(db, payload.customer_id)
-    if not customer:
-        raise NotFound("Customer")
+    if payload.customer_id:
+        customer = get_customer(db, payload.customer_id)
+        if not customer:
+            raise NotFound("Customer")
+        refuse_placeholder(customer)
 
     subtotal = compute_quotation_total(payload.items)
 

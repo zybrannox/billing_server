@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Literal, Optional
 from datetime import datetime
 from app.datetime_utils import UTCDateTime, OptionalUTCDateTime
+from app.new_customer import NewCustomer
 from app.response_model import ResponseModel
 
 # No payment gateway involved anywhere in this app - these are recorded
@@ -88,7 +89,15 @@ class InvoiceItemRead(ResponseModel):
 class InvoiceNewProject(BaseModel):
     # Optional: not every one-off invoice needs a job type (see create_invoice).
     project_type: Optional[str] = None
-    customer_id: int
+    # Exactly one: someone already saved, or someone typed in on this screen.
+    customer_id: Optional[int] = None
+    new_customer: Optional[NewCustomer] = None
+
+    @model_validator(mode="after")
+    def exactly_one_customer(self):
+        if bool(self.customer_id) == bool(self.new_customer):
+            raise ValueError("Pick an existing customer or enter a new one")
+        return self
 
 
 class InvoiceCreate(BaseModel):
