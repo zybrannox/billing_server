@@ -16,6 +16,7 @@ from .invoice_payment import InvoicePayment
 from .audit_log import AuditLog
 from .bin_item import BinItem
 from .note import Note
+from .issue import Issue
 from .system_metric import SystemMetric
 
 from .document_settings import DocumentSettings

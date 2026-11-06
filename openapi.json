@@ -3343,6 +3343,121 @@
         "title": "InvoiceViewCounts",
         "type": "object"
       },
+      "IssueCreate": {
+        "properties": {
+          "text": {
+            "maxLength": 2000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "IssueCreate",
+        "type": "object"
+      },
+      "IssueListResponse": {
+        "properties": {
+          "done_count": {
+            "title": "Done Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IssueRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "open_count": {
+            "title": "Open Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "open_count",
+          "done_count"
+        ],
+        "title": "IssueListResponse",
+        "type": "object"
+      },
+      "IssueRead": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "done_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done By"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_done": {
+            "title": "Is Done",
+            "type": "boolean"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "reported_by",
+          "created_at",
+          "is_done",
+          "done_at",
+          "done_by"
+        ],
+        "title": "IssueRead",
+        "type": "object"
+      },
+      "IssueUpdate": {
+        "properties": {
+          "is_done": {
+            "title": "Is Done",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "is_done"
+        ],
+        "title": "IssueUpdate",
+        "type": "object"
+      },
       "JobRequestCreate": {
         "properties": {
           "description": {
@@ -3878,6 +3993,89 @@
           "amount"
         ],
         "title": "MinCharge",
+        "type": "object"
+      },
+      "MyIssue": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "done_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done By"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_done": {
+            "title": "Is Done",
+            "type": "boolean"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "unseen": {
+            "title": "Unseen",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "reported_by",
+          "created_at",
+          "is_done",
+          "done_at",
+          "done_by",
+          "unseen"
+        ],
+        "title": "MyIssue",
+        "type": "object"
+      },
+      "MyIssuesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MyIssue"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "unseen_count": {
+            "title": "Unseen Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "unseen_count"
+        ],
+        "title": "MyIssuesResponse",
         "type": "object"
       },
       "NewCustomer": {
@@ -10206,6 +10404,284 @@
         "summary": "Create Invoice Share Link",
         "tags": [
           "Shared Documents"
+        ]
+      }
+    },
+    "/issues/": {
+      "get": {
+        "operationId": "list_issues_issues__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "done"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Issues",
+        "tags": [
+          "Issues"
+        ]
+      },
+      "post": {
+        "operationId": "report_issue_issues__post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Issue",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/issues/mine": {
+      "get": {
+        "operationId": "my_issues_issues_mine_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyIssuesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Issues",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/issues/mine/seen": {
+      "post": {
+        "operationId": "mark_mine_seen_issues_mine_seen_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark Mine Seen",
+        "tags": [
+          "Issues"
+        ]
+      }
+    },
+    "/issues/{issue_id}": {
+      "patch": {
+        "operationId": "update_issue_issues__issue_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "title": "Issue Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Issue",
+        "tags": [
+          "Issues"
         ]
       }
     },

@@ -15,6 +15,7 @@ from app.audit.controller import router as audit_router
 from app.audit.tracker import install as install_activity_tracking
 from app.backups.controller import router as backups_router
 from app.bin.controller import router as bin_router
+from app.issues.controller import router as issues_router
 from app.notes.controller import router as notes_router
 from app.bin.service import erase_expired
 from app.system_health.controller import router as system_health_router
@@ -245,6 +246,7 @@ app.include_router(audit_router)
 app.include_router(backups_router)
 app.include_router(bin_router)
 app.include_router(notes_router)
+app.include_router(issues_router)
 app.include_router(system_health_router)
 app.include_router(user_router)
 app.include_router(project_router)
