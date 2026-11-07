@@ -13,6 +13,7 @@ from .client_account import ClientAccount
 from .job_request import JobRequest
 from .job_request_file import JobRequestFile
 from .invoice_payment import InvoicePayment
+from .customer_payment import CustomerPayment
 from .audit_log import AuditLog
 from .bin_item import BinItem
 from .note import Note

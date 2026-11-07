@@ -25,6 +25,73 @@
         "title": "ActivateAccountRequest",
         "type": "object"
       },
+      "Allocation": {
+        "description": "How much of a payment goes to one invoice.",
+        "properties": {
+          "amount": {
+            "exclusiveMinimum": 0.0,
+            "title": "Amount",
+            "type": "number"
+          },
+          "invoice_id": {
+            "title": "Invoice Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "invoice_id",
+          "amount"
+        ],
+        "title": "Allocation",
+        "type": "object"
+      },
+      "AppliedTo": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "invoice_id": {
+            "title": "Invoice Id",
+            "type": "integer"
+          },
+          "invoice_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Number"
+          }
+        },
+        "required": [
+          "invoice_id",
+          "invoice_number",
+          "amount"
+        ],
+        "title": "AppliedTo",
+        "type": "object"
+      },
+      "ApplyCredit": {
+        "properties": {
+          "allocations": {
+            "items": {
+              "$ref": "#/components/schemas/Allocation"
+            },
+            "minItems": 1,
+            "title": "Allocations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "allocations"
+        ],
+        "title": "ApplyCredit",
+        "type": "object"
+      },
       "AttachFileEntry": {
         "properties": {
           "height": {
@@ -1286,6 +1353,186 @@
         "title": "CustomerListResponse",
         "type": "object"
       },
+      "CustomerPaymentCreate": {
+        "properties": {
+          "allocations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Allocation"
+            },
+            "title": "Allocations",
+            "type": "array"
+          },
+          "amount": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000000.0,
+            "title": "Amount",
+            "type": "number"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "payment_method": {
+            "enum": [
+              "Cash",
+              "UPI",
+              "Bank Transfer",
+              "Card",
+              "Cheque",
+              "Other"
+            ],
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "payment_reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Reference"
+          },
+          "received_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At"
+          }
+        },
+        "required": [
+          "amount",
+          "payment_method"
+        ],
+        "title": "CustomerPaymentCreate",
+        "type": "object"
+      },
+      "CustomerPaymentList": {
+        "properties": {
+          "credit": {
+            "title": "Credit",
+            "type": "number"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerPaymentRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "credit"
+        ],
+        "title": "CustomerPaymentList",
+        "type": "object"
+      },
+      "CustomerPaymentRead": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "applied_to": {
+            "items": {
+              "$ref": "#/components/schemas/AppliedTo"
+            },
+            "title": "Applied To",
+            "type": "array"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "customer_id": {
+            "title": "Customer Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "payment_method": {
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "payment_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Reference"
+          },
+          "received_at": {
+            "title": "Received At",
+            "type": "string"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded By"
+          },
+          "unused": {
+            "title": "Unused",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "customer_id",
+          "amount",
+          "payment_method",
+          "payment_reference",
+          "note",
+          "received_at",
+          "recorded_by",
+          "created_at",
+          "applied_to",
+          "unused"
+        ],
+        "title": "CustomerPaymentRead",
+        "type": "object"
+      },
       "CustomerProfile": {
         "properties": {
           "customer": {
@@ -1293,6 +1540,11 @@
           },
           "invoice_count": {
             "title": "Invoice Count",
+            "type": "integer"
+          },
+          "payment_count": {
+            "default": 0,
+            "title": "Payment Count",
             "type": "integer"
           },
           "projects": {
@@ -1411,6 +1663,10 @@
       },
       "CustomerStatement": {
         "properties": {
+          "credit": {
+            "title": "Credit",
+            "type": "number"
+          },
           "customer": {
             "$ref": "#/components/schemas/app__invoices__model__CustomerSummary"
           },
@@ -1439,6 +1695,13 @@
           "generated_at": {
             "title": "Generated At",
             "type": "string"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/StatementPayment"
+            },
+            "title": "Payments",
+            "type": "array"
           },
           "rows": {
             "items": {
@@ -1470,10 +1733,12 @@
           "date_to",
           "generated_at",
           "rows",
+          "payments",
           "total_billed",
           "total_paid",
           "total_balance",
-          "total_outstanding"
+          "total_outstanding",
+          "credit"
         ],
         "title": "CustomerStatement",
         "type": "object"
@@ -1483,6 +1748,11 @@
           "active_orders": {
             "title": "Active Orders",
             "type": "integer"
+          },
+          "credit": {
+            "default": 0,
+            "title": "Credit",
+            "type": "number"
           },
           "outstanding_balance": {
             "title": "Outstanding Balance",
@@ -2991,6 +3261,17 @@
             "title": "Amount",
             "type": "number"
           },
+          "customer_payment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Payment Id"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -3039,7 +3320,8 @@
           "payment_method",
           "payment_reference",
           "paid_at",
-          "recorded_by"
+          "recorded_by",
+          "customer_payment_id"
         ],
         "title": "InvoicePaymentRead",
         "type": "object"
@@ -4419,6 +4701,71 @@
           }
         },
         "title": "NoteUpdate",
+        "type": "object"
+      },
+      "OpenInvoice": {
+        "description": "An unpaid invoice a payment can go to, oldest first.",
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "balance_due": {
+            "title": "Balance Due",
+            "type": "number"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "invoice_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Number"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job"
+          }
+        },
+        "required": [
+          "id",
+          "invoice_number",
+          "created_at",
+          "due_date",
+          "job",
+          "amount",
+          "balance_due"
+        ],
+        "title": "OpenInvoice",
         "type": "object"
       },
       "OtherProcessRead": {
@@ -6127,6 +6474,55 @@
           "statement"
         ],
         "title": "SlowQueryRead",
+        "type": "object"
+      },
+      "StatementPayment": {
+        "description": "Money received as one payment and split across invoices, shown once as\nthe customer remembers paying it.",
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "applied_to": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Applied To",
+            "type": "array"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "payment_method": {
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "payment_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Reference"
+          },
+          "unused": {
+            "title": "Unused",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "amount",
+          "payment_method",
+          "payment_reference",
+          "applied_to",
+          "unused"
+        ],
+        "title": "StatementPayment",
         "type": "object"
       },
       "StatementRow": {
@@ -8026,6 +8422,116 @@
         ]
       }
     },
+    "/customer-payments/{payment_id}": {
+      "delete": {
+        "operationId": "delete_payment_customer_payments__payment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Payment",
+        "tags": [
+          "Customer payments"
+        ]
+      }
+    },
+    "/customer-payments/{payment_id}/apply": {
+      "post": {
+        "operationId": "apply_credit_customer_payments__payment_id__apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyCredit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPaymentRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Credit",
+        "tags": [
+          "Customer payments"
+        ]
+      }
+    },
     "/customers/": {
       "get": {
         "operationId": "get_customers_customers__get",
@@ -8335,6 +8841,171 @@
         "summary": "Update Customer",
         "tags": [
           "Customers"
+        ]
+      }
+    },
+    "/customers/{customer_id}/open-invoices": {
+      "get": {
+        "operationId": "list_open_invoices_customers__customer_id__open_invoices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "title": "Customer Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OpenInvoice"
+                  },
+                  "title": "Response List Open Invoices Customers  Customer Id  Open Invoices Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Open Invoices",
+        "tags": [
+          "Customer payments"
+        ]
+      }
+    },
+    "/customers/{customer_id}/payments": {
+      "get": {
+        "operationId": "list_customer_payments_customers__customer_id__payments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "title": "Customer Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPaymentList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Customer Payments",
+        "tags": [
+          "Customer payments"
+        ]
+      },
+      "post": {
+        "operationId": "receive_payment_customers__customer_id__payments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "title": "Customer Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerPaymentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPaymentRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Receive Payment",
+        "tags": [
+          "Customer payments"
         ]
       }
     },

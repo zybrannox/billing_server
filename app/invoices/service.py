@@ -301,9 +301,17 @@ def service_update(db: Session, invoice_id: int, payload: InvoiceUpdate, usernam
                 detail="Advance amount can't exceed the invoice total",
             )
 
+    cancelling = payload.status == "cancelled" and invoice.status == "pending"
     updated = update_invoice(db, invoice_id, payload, username)
     if not updated:
         raise NotFound("Invoice")
+    if cancelling:
+        # Money from a customer payment goes back to them as credit.
+        from app.customer_payments.service import release_from_cancelled
+
+        release_from_cancelled(db, updated, username or "system")
+        db.commit()
+        db.refresh(updated)
     return updated
 
 def service_mark_paid(

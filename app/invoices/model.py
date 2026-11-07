@@ -194,6 +194,9 @@ class InvoicePaymentRead(ResponseModel):
     payment_reference: Optional[str] = None
     paid_at: UTCDateTime
     recorded_by: Optional[str] = None
+    # Set when this came out of a payment recorded on the customer (one sum
+    # split across invoices) - see app/customer_payments.
+    customer_payment_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

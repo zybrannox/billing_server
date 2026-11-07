@@ -48,6 +48,7 @@ _TABLE_WORDS = {
     "quotations": "quotation",
     "job_requests": "job request",
     "project_files": "file",
+    "customer_payments": "payment",
 }
 
 

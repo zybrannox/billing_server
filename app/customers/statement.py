@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.customers.billing import customer_bill_to
 from app.datetime_utils import OptionalUTCDateTime, UTCDateTime, to_naive_utc, utcnow
+from app.customer_payments.service import describe, list_payments
 from app.entities import Customer, Invoice
 from app.entities.project import Project
 from app.invoices.model import CustomerSummary
@@ -24,17 +25,31 @@ class StatementRow(ResponseModel):
     status: Literal["pending", "paid"]
 
 
+class StatementPayment(ResponseModel):
+    """Money received as one payment and split across invoices, shown once as
+    the customer remembers paying it."""
+    date: UTCDateTime
+    amount: float
+    payment_method: str
+    payment_reference: Optional[str]
+    applied_to: List[str]
+    unused: float
+
+
 class CustomerStatement(ResponseModel):
     customer: CustomerSummary
     date_from: OptionalUTCDateTime
     date_to: OptionalUTCDateTime
     generated_at: UTCDateTime
     rows: List[StatementRow]
+    payments: List[StatementPayment]
     total_billed: float
     total_paid: float
     total_balance: float
     # Everything they owe, whatever the period: what a statement is usually for.
     total_outstanding: float
+    # Paid but not on any invoice yet, whatever the period.
+    credit: float
 
 
 def _paid(invoice: Invoice) -> float:
@@ -75,6 +90,24 @@ def build_statement(
     ]
     total_outstanding = sum(invoice.balance_due for invoice in invoices.filter(Invoice.status == "pending").all())
 
+    in_period_payments = describe(db, list_payments(
+        db, customer.id,
+        since=to_naive_utc(date_from) if date_from else None,
+        before=to_naive_utc(date_to) if date_to else None,
+    ))
+    payments = [
+        {
+            "date": p["received_at"],
+            "amount": p["amount"],
+            "payment_method": p["payment_method"],
+            "payment_reference": p["payment_reference"],
+            "applied_to": [a["invoice_number"] or f"Invoice #{a['invoice_id']}" for a in p["applied_to"]],
+            "unused": p["unused"],
+        }
+        for p in sorted(in_period_payments, key=lambda p: p["received_at"])
+    ]
+    credit = round(sum(p["unused"] for p in describe(db, list_payments(db, customer.id))), 2)
+
     return {
         "customer": customer_bill_to(db, customer),
         "date_from": date_from,
@@ -85,4 +118,6 @@ def build_statement(
         "total_paid": round(sum(r["paid"] for r in rows), 2),
         "total_balance": round(sum(r["balance"] for r in rows), 2),
         "total_outstanding": round(total_outstanding, 2),
+        "payments": payments,
+        "credit": credit,
     }

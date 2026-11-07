@@ -64,6 +64,8 @@ class CustomerStats(BaseModel):
     total_spent: float
     outstanding_balance: float
     pending_invoices: int
+    # Paid by the customer but not on any invoice yet (see app/customer_payments).
+    credit: float = 0
 
 
 # Powers GET /customers/{id}/profile - one call for the whole profile page
@@ -79,3 +81,4 @@ class CustomerProfile(BaseModel):
     projects: List[ProjectRead]
     invoice_count: int
     quotation_count: int
+    payment_count: int = 0

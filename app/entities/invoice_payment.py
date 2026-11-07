@@ -29,3 +29,10 @@ class InvoicePayment(Base):
     payment_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     paid_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     recorded_by: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Set when this share came out of a customer payment (one sum split across
+    # several invoices - see entities/customer_payment.py). SET NULL rather than
+    # CASCADE: deleting that payment first reverses its shares with negative
+    # entries, so the history stays and still sums to advance_amount.
+    customer_payment_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("customer_payments.id", ondelete="SET NULL"), nullable=True, index=True
+    )

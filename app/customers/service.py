@@ -1,3 +1,5 @@
+from app.customer_payments.service import credit_of
+from app.entities.customer_payment import CustomerPayment
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy import select, or_, func
@@ -224,10 +226,12 @@ class CustomerService:
                 total_spent=total_spent,
                 outstanding_balance=outstanding_balance,
                 pending_invoices=pending_invoices,
+                credit=credit_of(db, customer_id),
             ),
             projects=projects,
             invoice_count=invoice_count,
             quotation_count=quotation_count,
+            payment_count=db.query(func.count(CustomerPayment.id)).filter(CustomerPayment.customer_id == customer_id).scalar() or 0,
         )
 
     @staticmethod

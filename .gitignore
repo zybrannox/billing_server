@@ -68,3 +68,9 @@ __MACOSX/
 *.swo
 uploads/
 uploads/
+
+# Local database exports (customer data and password hashes) - never commit
+local-db-backup-*.json
+# Local-only password reset tool and its test - kept out of the repo
+scripts/reset_password.py
+tests/test_reset_password.py
