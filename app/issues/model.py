@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.datetime_utils import OptionalUTCDateTime, UTCDateTime
 from app.response_model import ResponseModel
 
-IssueStatus = Literal["open", "done"]
+IssueStatus = Literal["open", "done", "cancelled"]
 MAX_ISSUE_LENGTH = 2000
 
 
@@ -22,7 +22,7 @@ class IssueCreate(BaseModel):
 
 
 class IssueUpdate(BaseModel):
-    is_done: bool
+    status: IssueStatus
 
 
 class IssueRead(ResponseModel):
@@ -33,6 +33,9 @@ class IssueRead(ResponseModel):
     is_done: bool
     done_at: OptionalUTCDateTime
     done_by: Optional[str]
+    is_cancelled: bool
+    cancelled_at: OptionalUTCDateTime
+    cancelled_by: Optional[str]
 
     model_config = {"from_attributes": True}
 
@@ -42,10 +45,11 @@ class IssueListResponse(ResponseModel):
     total: int
     open_count: int
     done_count: int
+    cancelled_count: int
 
 
 class MyIssue(IssueRead):
-    # Solved, and the reporter hasn't seen that yet.
+    # Solved or cancelled, and the reporter hasn't seen that yet.
     unseen: bool
 
 

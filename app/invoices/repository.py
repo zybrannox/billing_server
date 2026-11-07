@@ -88,6 +88,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, username: str):
                 # placeholder values that would read as real scheduling
                 # decisions nobody actually made.
                 assigned_to=username,
+                bill_only=True,
                 priority="Normal",
                 client_status="Confirmed",
                 print_status="In Progress",

@@ -104,7 +104,7 @@ def get_all_projects(
 ):
     query = db.query(Project).options(
         joinedload(Project.customer), selectinload(Project.files)
-    )
+    ).filter(Project.bill_only.is_(False))
 
     if view == "ongoing":
         # Roll a project off the ongoing board once it's both fully

@@ -28,12 +28,12 @@ def _latest_invoice_status_subquery():
 def get_stats(db: Session) -> dict:
     total_customers = db.query(func.count(Customer.id)).scalar() or 0
 
-    total_projects = db.query(func.count(Project.id)).scalar() or 0
+    total_projects = db.query(func.count(Project.id)).filter(Project.bill_only.is_(False)).scalar() or 0
     completed_projects = (
-        db.query(func.count(Project.id)).filter(Project.print_status == "Completed").scalar() or 0
+        db.query(func.count(Project.id)).filter(Project.bill_only.is_(False), Project.print_status == "Completed").scalar() or 0
     )
     delivered_projects = (
-        db.query(func.count(Project.id)).filter(Project.delivered_at.isnot(None)).scalar() or 0
+        db.query(func.count(Project.id)).filter(Project.bill_only.is_(False), Project.delivered_at.isnot(None)).scalar() or 0
     )
 
     total_revenue = (
@@ -104,6 +104,7 @@ def get_stats(db: Session) -> dict:
 def get_project_status_breakdown(db: Session) -> list[dict]:
     rows = (
         db.query(Project.print_status, func.count(Project.id))
+        .filter(Project.bill_only.is_(False))
         .group_by(Project.print_status)
         .all()
     )
@@ -210,7 +211,7 @@ def get_attention_projects(db: Session, limit: int = 8):
     return (
         db.query(Project)
         .options(joinedload(Project.customer))
-        .filter(or_(not_yet_delivered, credit_unpaid))
+        .filter(Project.bill_only.is_(False), or_(not_yet_delivered, credit_unpaid))
         .order_by(Project.delivered_on_credit.desc(), Project.delivery_date.asc().nulls_last())
         .limit(limit)
         .all()
@@ -227,7 +228,7 @@ def get_recent_deliveries(db: Session, limit: int = 6):
     return (
         db.query(Project)
         .options(joinedload(Project.customer))
-        .filter(Project.delivered_at.isnot(None))
+        .filter(Project.bill_only.is_(False), Project.delivered_at.isnot(None))
         .order_by(Project.delivered_at.desc())
         .limit(limit)
         .all()

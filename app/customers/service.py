@@ -189,11 +189,11 @@ class CustomerService:
         _, quotation_count = get_all_quotations(db, page=1, page_size=1, customer_id=customer_id)
 
         total_orders = (
-            db.query(func.count(Project.id)).filter(Project.customer_id == customer_id).scalar() or 0
+            db.query(func.count(Project.id)).filter(Project.customer_id == customer_id, Project.bill_only.is_(False)).scalar() or 0
         )
         active_orders = (
             db.query(func.count(Project.id))
-            .filter(Project.customer_id == customer_id, Project.delivered_at.is_(None))
+            .filter(Project.customer_id == customer_id, Project.bill_only.is_(False), Project.delivered_at.is_(None))
             .scalar()
             or 0
         )
@@ -254,6 +254,13 @@ class CustomerService:
         if not customer:
             return False
         label = f"{customer.first_name} {customer.last_name}".strip()
+        # A deleted bill leaves its hidden record behind, which nobody could see to
+        # clear up, and which would otherwise block this.
+        db.query(Project).filter(
+            Project.customer_id == customer_id,
+            Project.bill_only.is_(True),
+            ~Project.id.in_(db.query(Invoice.project_id)),
+        ).delete(synchronize_session=False)
         move_to_bin(
             db,
             [BinEntry("customer", customer, label, customer.email or customer.contact_number)],

@@ -1,13 +1,11 @@
-from fastapi import APIRouter, Depends, File, Query, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.audit import record_audit
 from app.auth.permissions import INVOICE_EDIT, require_permission
 from app.entities import Invoice
 from app.errors import NotFound
-from app.rate_limiting import limiter
 from app.auth.dependencies import require_admin, get_current_user
-from . import printing
 from .model import InvoiceSummary, InvoiceView
 from .repository import get_invoice_summary
 from .model import (
@@ -107,34 +105,6 @@ def get_invoice_details(invoice_id: int, db: Session = Depends(get_db), _user: d
 @router.get("/{invoice_id}/payments", response_model=list[InvoicePaymentRead])
 def get_invoice_payments(invoice_id: int, db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
     return service_get_payments(db, invoice_id)
-
-# Far above a real invoice's PDF, which is a page or two.
-MAX_PRINT_BYTES = 25 * 1024 * 1024
-
-
-# The browser sends the PDF because that's where the invoice sheet is rendered.
-# Sync handler on purpose: the print commands block, so FastAPI runs this in its
-# worker thread pool and the event loop keeps serving everyone else.
-@router.post("/{invoice_id}/print")
-@limiter.limit("30/minute")
-def print_invoice(
-    request: Request,
-    response: Response,
-    invoice_id: int,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-):
-    invoice = service_get(db, invoice_id)
-    data = file.file.read(MAX_PRINT_BYTES + 1)
-    if len(data) > MAX_PRINT_BYTES:
-        raise HTTPException(status_code=413, detail="This file is too big to print.")
-    if not data.startswith(b"%PDF-"):
-        raise HTTPException(status_code=400, detail="Only a PDF can be printed.")
-    printer = printing.print_pdf(data, invoice.invoice_number)
-    record_audit(db, current_user["username"], "invoice.print", "invoice", invoice.id, {"label": invoice.invoice_number})
-    return {"printer": printer}
-
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):

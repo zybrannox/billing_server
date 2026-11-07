@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, func
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, func, false
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -83,3 +83,7 @@ class Project(Base):
     # way to know whether the message was actually sent from here.
     notified_at = Column(DateTime, nullable=True)
     notified_by = Column(String, nullable=True)
+    # The record behind a bill created on its own (see create_invoice's new_project).
+    # Invoices all hang off a project, but this one is nobody's work to track, so it
+    # stays out of every list and count of projects.
+    bill_only = Column(Boolean, nullable=False, default=False, server_default=false())

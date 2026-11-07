@@ -10,6 +10,8 @@ from app.entities import Customer
 from app.auth.dependencies import require_admin, get_current_user
 from app.customers.model import CustomerCreate, CustomerUpdate, CustomerRead, CustomerListResponse, CustomerProfile
 from app.customers.service import CustomerService
+from app.customers.statement import CustomerStatement, build_statement
+from app.datetime_utils import OptionalUTCDateTime
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 
@@ -72,6 +74,22 @@ def get_customer_profile(
         raise NotFound("Customer")
 
     return profile
+
+
+# Admin-only, like the profile: it's the same financial detail. The period is
+# optional; without one, it covers every bill.
+@router.get("/{customer_id}/statement", response_model=CustomerStatement)
+def get_customer_statement(
+    customer_id: int,
+    date_from: OptionalUTCDateTime = None,
+    date_to: OptionalUTCDateTime = None,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    customer = db.get(Customer, customer_id)
+    if not customer:
+        raise NotFound("Customer")
+    return build_statement(db, customer, date_from, date_to)
 
 
 @router.put("/{customer_id}", response_model=CustomerRead)

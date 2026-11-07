@@ -507,20 +507,6 @@
         "title": "Body_create_quotation_share_link_quotations__quotation_id__share_link_post",
         "type": "object"
       },
-      "Body_print_invoice_invoices__invoice_id__print_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_print_invoice_invoices__invoice_id__print_post",
-        "type": "object"
-      },
       "Body_upload_chunk_files_upload_chunk_post": {
         "properties": {
           "chunk": {
@@ -1421,6 +1407,75 @@
           "id"
         ],
         "title": "CustomerRead",
+        "type": "object"
+      },
+      "CustomerStatement": {
+        "properties": {
+          "customer": {
+            "$ref": "#/components/schemas/app__invoices__model__CustomerSummary"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date From"
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date To"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/StatementRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total_balance": {
+            "title": "Total Balance",
+            "type": "number"
+          },
+          "total_billed": {
+            "title": "Total Billed",
+            "type": "number"
+          },
+          "total_outstanding": {
+            "title": "Total Outstanding",
+            "type": "number"
+          },
+          "total_paid": {
+            "title": "Total Paid",
+            "type": "number"
+          }
+        },
+        "required": [
+          "customer",
+          "date_from",
+          "date_to",
+          "generated_at",
+          "rows",
+          "total_billed",
+          "total_paid",
+          "total_balance",
+          "total_outstanding"
+        ],
+        "title": "CustomerStatement",
         "type": "object"
       },
       "CustomerStats": {
@@ -3359,6 +3414,10 @@
       },
       "IssueListResponse": {
         "properties": {
+          "cancelled_count": {
+            "title": "Cancelled Count",
+            "type": "integer"
+          },
           "done_count": {
             "title": "Done Count",
             "type": "integer"
@@ -3383,13 +3442,36 @@
           "items",
           "total",
           "open_count",
-          "done_count"
+          "done_count",
+          "cancelled_count"
         ],
         "title": "IssueListResponse",
         "type": "object"
       },
       "IssueRead": {
         "properties": {
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "cancelled_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled By"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -3420,6 +3502,10 @@
             "title": "Id",
             "type": "integer"
           },
+          "is_cancelled": {
+            "title": "Is Cancelled",
+            "type": "boolean"
+          },
           "is_done": {
             "title": "Is Done",
             "type": "boolean"
@@ -3440,20 +3526,28 @@
           "created_at",
           "is_done",
           "done_at",
-          "done_by"
+          "done_by",
+          "is_cancelled",
+          "cancelled_at",
+          "cancelled_by"
         ],
         "title": "IssueRead",
         "type": "object"
       },
       "IssueUpdate": {
         "properties": {
-          "is_done": {
-            "title": "Is Done",
-            "type": "boolean"
+          "status": {
+            "enum": [
+              "open",
+              "done",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
-          "is_done"
+          "status"
         ],
         "title": "IssueUpdate",
         "type": "object"
@@ -3997,6 +4091,28 @@
       },
       "MyIssue": {
         "properties": {
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "cancelled_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled By"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -4027,6 +4143,10 @@
             "title": "Id",
             "type": "integer"
           },
+          "is_cancelled": {
+            "title": "Is Cancelled",
+            "type": "boolean"
+          },
           "is_done": {
             "title": "Is Done",
             "type": "boolean"
@@ -4052,6 +4172,9 @@
           "is_done",
           "done_at",
           "done_by",
+          "is_cancelled",
+          "cancelled_at",
+          "cancelled_by",
           "unseen"
         ],
         "title": "MyIssue",
@@ -6004,6 +6127,84 @@
           "statement"
         ],
         "title": "SlowQueryRead",
+        "type": "object"
+      },
+      "StatementRow": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "balance": {
+            "title": "Balance",
+            "type": "number"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "invoice_id": {
+            "title": "Invoice Id",
+            "type": "integer"
+          },
+          "invoice_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Number"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job"
+          },
+          "paid": {
+            "title": "Paid",
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "paid"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "invoice_id",
+          "invoice_number",
+          "date",
+          "due_date",
+          "job",
+          "amount",
+          "paid",
+          "balance",
+          "status"
+        ],
+        "title": "StatementRow",
         "type": "object"
       },
       "StatusCount": {
@@ -8188,6 +8389,91 @@
         ]
       }
     },
+    "/customers/{customer_id}/statement": {
+      "get": {
+        "operationId": "get_customer_statement_customers__customer_id__statement_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "title": "Customer Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "access_token",
+            "required": false,
+            "schema": {
+              "title": "Access Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerStatement"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Customer Statement",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
     "/dashboard/notifications/deliveries": {
       "get": {
         "operationId": "get_delivery_notifications_dashboard_notifications_deliveries_get",
@@ -10179,65 +10465,6 @@
         ]
       }
     },
-    "/invoices/{invoice_id}/print": {
-      "post": {
-        "operationId": "print_invoice_invoices__invoice_id__print_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "invoice_id",
-            "required": true,
-            "schema": {
-              "title": "Invoice Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "access_token",
-            "required": false,
-            "schema": {
-              "title": "Access Token",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_print_invoice_invoices__invoice_id__print_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Print Invoice",
-        "tags": [
-          "Invoices"
-        ]
-      }
-    },
     "/invoices/{invoice_id}/record-payment": {
       "patch": {
         "operationId": "record_invoice_payment_invoices__invoice_id__record_payment_patch",
@@ -10443,7 +10670,8 @@
                 {
                   "enum": [
                     "open",
-                    "done"
+                    "done",
+                    "cancelled"
                   ],
                   "type": "string"
                 },

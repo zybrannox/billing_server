@@ -94,13 +94,13 @@ class CompanyService:
 
         total_orders = (
             db.query(func.count(Project.id))
-            .filter(Project.customer_id.in_(customer_ids))
+            .filter(Project.customer_id.in_(customer_ids), Project.bill_only.is_(False))
             .scalar()
             or 0
         )
         active_orders = (
             db.query(func.count(Project.id))
-            .filter(Project.customer_id.in_(customer_ids), Project.delivered_at.is_(None))
+            .filter(Project.customer_id.in_(customer_ids), Project.bill_only.is_(False), Project.delivered_at.is_(None))
             .scalar()
             or 0
         )

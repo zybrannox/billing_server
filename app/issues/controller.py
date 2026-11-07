@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy import func
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.audit.service import record as record_audit
@@ -22,6 +22,14 @@ MY_ISSUES_LIMIT = 30
 
 def _my_id(db: Session, current_user: dict) -> int:
     return db.query(User.id).filter(User.username == current_user["username"]).scalar()
+
+
+def _is_open():
+    return Issue.is_done.is_(False) & Issue.cancelled_at.is_(None)
+
+
+def _is_unseen():
+    return or_(Issue.is_done.is_(True), Issue.cancelled_at.isnot(None)) & Issue.done_seen_at.is_(None)
 
 
 def _mine(db: Session, current_user: dict):
@@ -47,15 +55,15 @@ def report_issue(
 @router.get("/mine", response_model=MyIssuesResponse)
 def my_issues(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     items = _mine(db, current_user).order_by(Issue.created_at.desc(), Issue.id.desc()).limit(MY_ISSUES_LIMIT).all()
-    # Counted separately so an old solved issue past the limit can't be missed.
-    unseen_count = _mine(db, current_user).filter(Issue.is_done.is_(True), Issue.done_seen_at.is_(None)).count()
+    # Counted separately so an old answered issue past the limit can't be missed.
+    unseen_count = _mine(db, current_user).filter(_is_unseen()).count()
     return {"items": items, "unseen_count": unseen_count}
 
 
 @router.post("/mine/seen")
 def mark_mine_seen(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     now = utcnow()
-    _mine(db, current_user).filter(Issue.is_done.is_(True), Issue.done_seen_at.is_(None)).update(
+    _mine(db, current_user).filter(_is_unseen()).update(
         {Issue.done_seen_at: now}, synchronize_session=False
     )
     db.commit()
@@ -71,18 +79,35 @@ def list_issues(
     _admin: dict = Depends(require_admin),
 ):
     query = db.query(Issue)
-    if status:
-        query = query.filter(Issue.is_done.is_(status == "done"))
+    if status == "open":
+        query = query.filter(_is_open())
+    elif status == "done":
+        query = query.filter(Issue.is_done.is_(True))
+    elif status == "cancelled":
+        query = query.filter(Issue.cancelled_at.isnot(None))
     total = query.count()
-    # What still needs doing comes first; solved ones with the latest on top.
+    # What still needs doing comes first; answered ones with the latest on top.
     items = (
-        query.order_by(Issue.is_done.asc(), Issue.done_at.desc(), Issue.created_at.desc(), Issue.id.desc())
+        query.order_by(
+            case((_is_open(), 0), else_=1),
+            func.coalesce(Issue.done_at, Issue.cancelled_at).desc(),
+            Issue.created_at.desc(),
+            Issue.id.desc(),
+        )
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
-    counts = dict(db.query(Issue.is_done, func.count(Issue.id)).group_by(Issue.is_done).all())
-    return {"items": items, "total": total, "open_count": counts.get(False, 0), "done_count": counts.get(True, 0)}
+    open_count = db.query(func.count(Issue.id)).filter(_is_open()).scalar()
+    done_count = db.query(func.count(Issue.id)).filter(Issue.is_done.is_(True)).scalar()
+    cancelled_count = db.query(func.count(Issue.id)).filter(Issue.cancelled_at.isnot(None)).scalar()
+    return {
+        "items": items,
+        "total": total,
+        "open_count": open_count,
+        "done_count": done_count,
+        "cancelled_count": cancelled_count,
+    }
 
 
 @router.patch("/{issue_id}", response_model=IssueRead)
@@ -96,14 +121,18 @@ def update_issue(
     if not issue:
         raise NotFound("Issue")
 
-    if payload.is_done != issue.is_done:
-        issue.is_done = payload.is_done
-        issue.done_at = utcnow() if payload.is_done else None
-        issue.done_by = _admin["username"] if payload.is_done else None
-        # Solving it again later is news again.
+    current = "done" if issue.is_done else "cancelled" if issue.is_cancelled else "open"
+    if payload.status != current:
+        now = utcnow()
+        issue.is_done = payload.status == "done"
+        issue.done_at = now if payload.status == "done" else None
+        issue.done_by = _admin["username"] if payload.status == "done" else None
+        issue.cancelled_at = now if payload.status == "cancelled" else None
+        issue.cancelled_by = _admin["username"] if payload.status == "cancelled" else None
+        # Any new answer is news again.
         issue.done_seen_at = None
         db.commit()
         db.refresh(issue)
-        action = "issue.done" if payload.is_done else "issue.reopen"
+        action = {"done": "issue.done", "cancelled": "issue.cancel", "open": "issue.reopen"}[payload.status]
         record_audit(db, _admin["username"], action, "issue", issue.id, {"label": issue.text[:120]})
     return issue

@@ -39,7 +39,7 @@ def _report(client, text="The printer is jammed"):
 
 def _solve(client, boss, issue_id, reporter=None):
     _sign_in(client, boss)
-    res = client.patch(f"/issues/{issue_id}", json={"is_done": True})
+    res = client.patch(f"/issues/{issue_id}", json={"status": "done"})
     assert res.status_code == 200, res.text
     if reporter:
         _sign_in(client, reporter)
@@ -92,7 +92,7 @@ def test_a_reused_username_doesnt_inherit_issues(client, db, ravi):
 
 @pytest.mark.parametrize("method,path,body", [
     ("get", "/issues/", None),
-    ("patch", "/issues/1", {"is_done": True}),
+    ("patch", "/issues/1", {"status": "done"}),
 ])
 def test_employees_cant_use_the_admin_side(client, db, ravi, method, path, body):
     _report(client)
@@ -130,7 +130,7 @@ def test_marking_done_says_who_and_when_and_is_logged(client, db, ravi, boss):
 
 def test_a_missing_issue_is_not_found(client, db, boss):
     _sign_in(client, boss)
-    assert client.patch("/issues/999", json={"is_done": True}).status_code == 404
+    assert client.patch("/issues/999", json={"status": "done"}).status_code == 404
 
 
 def test_nothing_to_notify_until_its_solved(client, ravi):
@@ -183,7 +183,7 @@ def test_reopening_clears_it_and_solving_again_notifies_again(client, db, ravi, 
     client.post("/issues/mine/seen")
 
     _sign_in(client, boss)
-    reopened = client.patch(f"/issues/{issue['id']}", json={"is_done": False}).json()
+    reopened = client.patch(f"/issues/{issue['id']}", json={"status": "open"}).json()
     assert (reopened["is_done"], reopened["done_by"], reopened["done_at"]) == (False, None, None)
     assert db.query(AuditLog).filter_by(action="issue.reopen").count() == 1
 
@@ -209,3 +209,88 @@ def test_an_unseen_solved_issue_past_the_list_limit_still_counts(client, db, rav
     body = client.get("/issues/mine").json()
     assert len(body["items"]) == 30
     assert body["unseen_count"] == 1
+
+
+# --- cancelling ------------------------------------------------------------------------
+
+
+def _cancel(client, boss, issue_id, reporter=None):
+    _sign_in(client, boss)
+    res = client.patch(f"/issues/{issue_id}", json={"status": "cancelled"})
+    assert res.status_code == 200, res.text
+    if reporter:
+        _sign_in(client, reporter)
+    return res.json()
+
+
+def test_an_employee_cant_cancel_an_issue(client, db, ravi):
+    issue = _report(client)
+    assert client.patch(f"/issues/{issue['id']}", json={"status": "cancelled"}).status_code == 403
+    assert db.query(Issue).one().is_cancelled is False
+
+
+def test_cancelling_says_who_and_when_and_is_logged(client, db, ravi, boss):
+    issue = _cancel(client, boss, _report(client)["id"])
+    assert (issue["is_cancelled"], issue["is_done"], issue["cancelled_by"]) == (True, False, "boss")
+    assert issue["cancelled_at"] is not None
+    assert db.query(AuditLog).filter_by(action="issue.cancel", actor="boss").count() == 1
+
+
+def test_a_cancelled_issue_has_its_own_list_and_count(client, db, ravi, boss):
+    first = _report(client, "Cancel me")
+    second = _report(client, "Solve me")
+    _report(client, "Leave me")
+    _cancel(client, boss, first["id"])
+    _solve(client, boss, second["id"])
+    body = client.get("/issues/", params={"status": "cancelled"}).json()
+    assert [i["text"] for i in body["items"]] == ["Cancel me"]
+    assert (body["open_count"], body["done_count"], body["cancelled_count"]) == (1, 1, 1)
+    assert [i["text"] for i in client.get("/issues/", params={"status": "open"}).json()["items"]] == ["Leave me"]
+    assert [i["text"] for i in client.get("/issues/", params={"status": "done"}).json()["items"]] == ["Solve me"]
+    assert client.get("/issues/").json()["items"][0]["text"] == "Leave me"
+
+
+def test_the_reporter_is_told_when_its_cancelled_until_they_see_it(client, db, ravi, boss):
+    _cancel(client, boss, _report(client)["id"], reporter=ravi)
+    body = client.get("/issues/mine").json()
+    assert body["unseen_count"] == 1
+    assert (body["items"][0]["unseen"], body["items"][0]["is_cancelled"]) == (True, True)
+    client.post("/issues/mine/seen")
+    assert client.get("/issues/mine").json()["unseen_count"] == 0
+
+
+def test_cancelling_twice_changes_nothing(client, db, ravi, boss):
+    issue = _report(client)
+    _cancel(client, boss, issue["id"], reporter=ravi)
+    client.post("/issues/mine/seen")
+    _cancel(client, boss, issue["id"], reporter=ravi)
+    assert client.get("/issues/mine").json()["unseen_count"] == 0
+    assert db.query(AuditLog).filter_by(action="issue.cancel").count() == 1
+
+
+def test_a_cancelled_issue_can_be_reopened(client, db, ravi, boss):
+    issue = _cancel(client, boss, _report(client)["id"])
+    reopened = client.patch(f"/issues/{issue['id']}", json={"status": "open"}).json()
+    assert (reopened["is_cancelled"], reopened["cancelled_by"], reopened["cancelled_at"]) == (False, None, None)
+    assert client.get("/issues/").json()["open_count"] == 1
+    assert db.query(AuditLog).filter_by(action="issue.reopen").count() == 1
+
+
+def test_cancelling_a_solved_issue_replaces_the_answer(client, db, ravi, boss):
+    issue = _solve(client, boss, _report(client)["id"])
+    cancelled = _cancel(client, boss, issue["id"])
+    assert (cancelled["is_done"], cancelled["done_by"], cancelled["is_cancelled"]) == (False, None, True)
+    body = client.get("/issues/").json()
+    assert (body["open_count"], body["done_count"], body["cancelled_count"]) == (0, 0, 1)
+
+
+def test_solving_a_cancelled_issue_replaces_the_answer(client, db, ravi, boss):
+    issue = _cancel(client, boss, _report(client)["id"])
+    solved = _solve(client, boss, issue["id"])
+    assert (solved["is_done"], solved["is_cancelled"]) == (True, False)
+
+
+def test_a_made_up_status_is_refused(client, db, ravi, boss):
+    issue = _report(client)
+    _sign_in(client, boss)
+    assert client.patch(f"/issues/{issue['id']}", json={"status": "deleted"}).status_code == 422

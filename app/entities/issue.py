@@ -26,9 +26,17 @@ class Issue(Base):
     is_done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false(), index=True)
     done_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     done_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # When the reporter saw it was solved. Until then, they still have a notification.
+    # An admin decided not to act on it. Separate from done: it wasn't solved.
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    cancelled_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # When the reporter saw it was solved or cancelled. Until then, they still have
+    # a notification.
     done_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     @property
+    def is_cancelled(self) -> bool:
+        return self.cancelled_at is not None
+
+    @property
     def unseen(self) -> bool:
-        return self.is_done and self.done_seen_at is None
+        return (self.is_done or self.is_cancelled) and self.done_seen_at is None
