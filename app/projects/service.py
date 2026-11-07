@@ -125,7 +125,6 @@ def service_mark_delivered(
     project_id: int,
     username: str,
     on_credit: bool = False,
-    is_admin: bool = False,
 ):
     project = get_project(db, project_id)
     if not project:
@@ -157,15 +156,9 @@ def service_mark_delivered(
                 detail="This project must be invoiced before it can be delivered",
             )
         if on_credit:
-            # "Deliver on Credit" is a deliberate business decision to ship
-            # unpaid work - previously only the frontend restricted this to
-            # admins (DeliveryCheck.tsx's canDeliverOnCredit); enforced here
-            # too so a direct API call can't let any employee authorize it.
-            if not is_admin:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Only an admin can authorize a delivery on credit",
-                )
+            # Any staff member can hand work over on credit; it's recorded as
+            # such (delivered_on_credit, delivered_by) so the unpaid balance stays
+            # flagged on the dashboard until it's settled.
             if invoice.status != "pending":
                 raise HTTPException(
                     status_code=400,

@@ -214,3 +214,41 @@ def test_a_missing_customer_or_payment_is_not_found(client, admin):
     assert client.post("/customers/999/payments", json={"amount": 1, "payment_method": "Cash"}).status_code == 404
     assert client.post("/customer-payments/999/apply", json={"allocations": [{"invoice_id": 1, "amount": 1}]}).status_code == 404
     assert client.delete("/customer-payments/999").status_code == 404
+
+
+# --- deleting the customer -------------------------------------------------------------
+
+
+def _credit_only(client, customer, amount=500):
+    res = client.post(f"/customers/{customer.id}/payments", json={"amount": amount, "payment_method": "Cash", "allocations": []})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def test_a_customer_with_credit_cant_be_deleted(client, db, admin, customer):
+    _credit_only(client, customer)
+    res = client.delete(f"/customers/{customer.id}")
+    assert res.status_code == 400
+    assert "payments on file" in res.json()["detail"]
+    db.expire_all()
+    assert db.get(Customer, customer.id) is not None
+    assert db.query(CustomerPayment).count() == 1
+    assert db.query(BinItem).count() == 0
+
+
+def test_a_customer_can_be_deleted_once_their_mistaken_payment_is(client, db, admin, customer):
+    customer_id = customer.id
+    payment = _credit_only(client, customer)
+    assert client.delete(f"/customer-payments/{payment['id']}").status_code == 200
+    assert client.delete(f"/customers/{customer_id}").status_code == 200
+    db.expire_all()
+    assert db.get(Customer, customer_id) is None
+
+
+def test_a_customer_without_payments_can_still_be_deleted(client, db, admin, customer):
+    assert client.delete(f"/customers/{customer.id}").status_code == 200
+
+
+def test_another_customers_payment_doesnt_block_this_one(client, db, admin, customer):
+    _credit_only(client, _customer(db, "Ravi", "9876500000"))
+    assert client.delete(f"/customers/{customer.id}").status_code == 200

@@ -133,7 +133,6 @@ def mark_delivered(
         project_id,
         current_user["username"],
         on_credit=on_credit,
-        is_admin=current_user.get("role") == "admin",
     )
 
 

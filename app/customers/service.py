@@ -258,6 +258,13 @@ class CustomerService:
         if not customer:
             return False
         label = f"{customer.first_name} {customer.last_name}".strip()
+        # Same rule as projects and invoices: money they've paid stays on file. Their
+        # payments would otherwise go with them and be lost once the Bin empties.
+        if db.query(CustomerPayment.id).filter(CustomerPayment.customer_id == customer_id).first():
+            raise BadRequest(
+                "This customer has payments on file and can't be deleted. "
+                "If a payment was recorded by mistake, delete it first."
+            )
         # A deleted bill leaves its hidden record behind, which nobody could see to
         # clear up, and which would otherwise block this.
         db.query(Project).filter(
